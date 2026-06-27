@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fruit Crush</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0c0e1a;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 30%, rgba(40,100,220,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(200,50,120,0.1) 0%, transparent 50%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  color: #fff;
+  overflow: hidden;
+  user-select: none;
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  background: rgba(255,255,255,0.04);
+  padding: 10px 28px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+}
+
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 72px;
+}
+
+.hud-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.35);
+  font-weight: 600;
+}
+
+.hud-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+#moves-val { color: #ff5c8a; }
+#score-val { color: #ffcc00; }
+#target-val { color: #44e5a0; }
+
+.level-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.board-frame {
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px);
+}
+
+#board {
+  position: relative;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.cell-bg {
+  position: absolute;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.cell-bg.dark { background: rgba(255,255,255,0.015); }
+.cell-bg.light { background: rgba(255,255,255,0.03); }
+
+.piece-el {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  z-index: 1;
+  will-change: transform, left, top;
+}
+
+.piece-el.dragging {
+  z-index: 10;
+  cursor: grabbing;
+  filter: brightness(1.2);
+}
+
+.piece-el.selected .fruit {
+  animation: pulse 0.6s ease-in-out infinite alternate;
+}
+
+.piece-el.swapping {
+  transition: left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.piece-el.falling {
+  transition: top 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.piece-el.clearing {
+  animation: pop 0.35s ease-out forwards;
+  pointer-events: none;
+}
+
+.piece-el.spawning {
+  animation: spawnIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.fruit {
+  font-size: 34px;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  line-height: 1;
+  image-rendering: pixelated;
+}
+
+.piece-el:hover .fruit { transform: scale(1.12); }
+.piece-el.dragging .fruit { transform: scale(1.2); }
+
+.special-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.badge-striped-h {
+  background: rgba(255,255,255,0.85);
+  color: #333;
+}
+.badge-striped-h::after { content: '\2194'; font-size: 11px; }
+
+.badge-striped-v {
+  background: rgba(255,255,255,0.85);
+  color: #333;
+}
+.badge-striped-v::after { content: '\2195'; font-size: 11px; }
+
+.badge-wrapped {
+  background: rgba(255,100,50,0.9);
+  color: #fff;
+}
+.badge-wrapped::after { content: '\2738'; font-size: 10px; }
+
+.badge-bomb {
+  background: radial-gradient(circle, #fff, #aaa);
+  color: #222;
+  width: 22px;
+  height: 22px;
+  bottom: 0;
+  right: 0;
+  border: 2px solid rgba(255,255,255,0.6);
+  box-shadow: 0 0 12px rgba(255,255,255,0.5);
+}
+.badge-bomb::after { content: '\2605'; font-size: 12px; }
+
+.bomb-fruit {
+  font-size: 36px !important;
+  filter: drop-shadow(0 0 12px rgba(255,255,255,0.7)) drop-shadow(0 2px 6px rgba(0,0,0,0.5)) !important;
+}
+
+.jelly {
+  position: absolute;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 0;
+}
+.jelly-1 {
+  background: rgba(180,80,255,0.12);
+  border: 1.5px solid rgba(180,80,255,0.25);
+  box-shadow: inset 0 0 12px rgba(180,80,255,0.1);
+}
+.jelly-2 {
+  background: rgba(180,80,255,0.22);
+  border: 2px solid rgba(180,80,255,0.4);
+  box-shadow: inset 0 0 16px rgba(180,80,255,0.15);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,8,20,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.overlay h1 {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.title-gradient {
+  background: linear-gradient(135deg, #ff5c8a, #ffcc00, #44e5a0, #5ca0ff);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradShift 4s ease infinite;
+}
+
+@keyframes gradShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.overlay p {
+  color: rgba(255,255,255,0.5);
+  font-size: 15px;
+  max-width: 340px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.btn {
+  padding: 14px 48px;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #ff5c8a, #ff3366);
+  box-shadow: 0 4px 20px rgba(255,60,102,0.35);
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 28px rgba(255,60,102,0.5);
+}
+.btn:active { transform: scale(0.98); }
+
+.stars { font-size: 40px; letter-spacing: 10px; }
+.star-on { color: #ffcc00; text-shadow: 0 0 14px rgba(255,204,0,0.5); }
+.star-off { color: rgba(255,255,255,0.1); }
+
+.combo-text {
+  position: absolute;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffcc00;
+  text-shadow: 0 0 12px rgba(255,204,0,0.6), 0 2px 4px rgba(0,0,0,0.5);
+  pointer-events: none;
+  z-index: 50;
+  animation: floatUp 0.9s ease-out forwards;
+}
+
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0) scale(0.8); }
+  20% { opacity: 1; transform: translateY(-5px) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.9); }
+}
+
+@keyframes pop {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.35); opacity: 0.7; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.15); }
+}
+
+@keyframes spawnIn {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.obj-info {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 40;
+}
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <div class="level-label">Level <span id="level-num">1</span></div>
+  <div class="hud">
+    <div class="hud-item"><span class="hud-label">Moves</span><span class="hud-value" id="moves-val">20</span></div>
+    <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="score-val">0</span></div>
+    <div class="hud-item"><span class="hud-label">Target</span><span class="hud-value" id="target-val">1000</span></div>
+  </div>
+  <div class="obj-info" id="obj-info">Reach the target score!</div>
+  <div class="board-frame">
+    <div id="board"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <h1 class="title-gradient">Fruit Crush</h1>
+  <p>Drag fruits to swap them and match 3 or more. Bigger matches create powerful specials!</p>
+  <button class="btn" id="start-btn">Play</button>
+</div>
+
+<script>
+const COLS = 8, ROWS = 9, CELL = 54, COLORS = 6, PAD = 3;
+const boardEl = document.getElementById('board');
+const overlayEl = document.getElementById('overlay');
+
+boardEl.style.width = COLS * CELL + PAD * 2 + 'px';
+boardEl.style.height = ROWS * CELL + PAD * 2 + 'px';
+
+const FRUITS = [
+  '\u{1F353}', // strawberry
+  '\u{1F34A}', // orange/tangerine
+  '\u{1F347}', // grapes
+  '\u{1F514}', // blueberry (bell as stand-in, we'll use a real one)
+  '\u{1F34E}', // red apple
+  '\u{1F34B}', // lemon
+];
+
+// Better fruit set with distinct digital fruits
+const FRUIT_SVG = [
+  // 0: Strawberry (red)
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><linearGradient id="s0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff6b8a"/><stop offset="100%" stop-color="#e5254a"/></linearGradient></defs><path d="M18 4c-2 0-4 1-5 2 1-3 4-4 5-4s4 1 5 4c-1-1-3-2-5-2z" fill="#4ab648"/><ellipse cx="18" cy="22" rx="12" ry="13" fill="url(#s0)"/><circle cx="14" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="22" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="18" cy="23" r="1" fill="#fff" opacity="0.5"/><circle cx="14" cy="26" r="1" fill="#fff" opacity="0.5"/><circle cx="22" cy="26" r="1" fill="#fff" opacity="0.5"/></svg>`,
+  // 1: Orange
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s1" cx="40%" cy="35%"><stop offset="0%" stop-color="#ffc040"/><stop offset="100%" stop-color="#ff8c00"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#s1)"/><ellipse cx="18" cy="8" rx="3" ry="2" fill="#4ab648"/><circle cx="13" cy="16" r="5" fill="rgba(255,255,255,0.12)"/></svg>`,
+  // 2: Grapes (purple)
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s2" cx="40%" cy="30%"><stop offset="0%" stop-color="#c88aff"/><stop offset="100%" stop-color="#7b2fbe"/></radialGradient></defs><circle cx="13" cy="16" r="5.5" fill="url(#s2)"/><circle cx="23" cy="16" r="5.5" fill="url(#s2)"/><circle cx="18" cy="15" r="5.5" fill="url(#s2)"/><circle cx="10" cy="24" r="5.5" fill="url(#s2)"/><circle cx="18" cy="23" r="5.5" fill="url(#s2)"/><circle cx="26" cy="24" r="5.5" fill="url(#s2)"/><circle cx="14" cy="30" r="5.5" fill="url(#s2)"/><circle cx="22" cy="30" r="5.5" fill="url(#s2)"/><rect x="17" y="3" width="2" height="8" rx="1" fill="#4ab648"/><circle cx="12" cy="14" r="2" fill="rgba(255,255,255,0.25)"/></svg>`,
+  // 3: Blueberry (blue)
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s3" cx="38%" cy="32%"><stop offset="0%" stop-color="#6ec6ff"/><stop offset="100%" stop-color="#1a6bcc"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#s3)"/><path d="M14 9 L18 7 L22 9" stroke="#2a4a8a" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="13" cy="15" r="4" fill="rgba(255,255,255,0.18)"/></svg>`,
+  // 4: Apple (green)
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s4" cx="38%" cy="30%"><stop offset="0%" stop-color="#8aee6c"/><stop offset="100%" stop-color="#34a835"/></radialGradient></defs><path d="M18 8c-8 0-14 7-13 16 1 6 5 9 8 9 2 0 3-1 5-1s3 1 5 1c3 0 7-3 8-9 1-9-5-16-13-16z" fill="url(#s4)"/><path d="M18 4c0 0 2-3 5-3" stroke="#6b3a1f" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="20" cy="3" rx="3" ry="2" fill="#4ab648" transform="rotate(-20 20 3)"/><circle cx="13" cy="15" r="4" fill="rgba(255,255,255,0.15)"/></svg>`,
+  // 5: Lemon (yellow)
+  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s5" cx="40%" cy="35%"><stop offset="0%" stop-color="#fff176"/><stop offset="100%" stop-color="#ffc107"/></radialGradient></defs><ellipse cx="18" cy="19" rx="13" ry="11" fill="url(#s5)" transform="rotate(-15 18 19)"/><ellipse cx="14" cy="15" rx="4" ry="3" fill="rgba(255,255,255,0.2)" transform="rotate(-15 14 15)"/><circle cx="19" cy="10" r="2" fill="#4ab648"/></svg>`,
+];
+
+let grid, jelly, moves, score, level, selected, busy, levelData;
+let cascadeCount = 0;
+let dragState = null;
+let pieceElements = new Map();
+
+const LEVELS = [
+  { moves: 25, type: 'score', target: 1500 },
+  { moves: 22, type: 'score', target: 2500 },
+  { moves: 20, type: 'jelly', target: 0 },
+  { moves: 28, type: 'score', target: 3500 },
+  { moves: 20, type: 'jelly', target: 0 },
+  { moves: 18, type: 'score', target: 3000 },
+  { moves: 22, type: 'jelly', target: 0 },
+  { moves: 25, type: 'score', target: 5000 },
+  { moves: 20, type: 'jelly', target: 0 },
+  { moves: 15, type: 'score', target: 4000 },
+];
+
+function getLevel(n) {
+  if (n <= LEVELS.length) return { ...LEVELS[n - 1] };
+  return {
+    moves: Math.max(12, 25 - Math.floor(n / 3)),
+    type: n % 2 === 0 ? 'jelly' : 'score',
+    target: n % 2 === 0 ? 0 : 2000 + n * 400
+  };
+}
+
+function wouldMatch(c, r, color) {
+  if (c >= 2 && grid[r][c-1]?.color === color && grid[r][c-2]?.color === color) return true;
+  if (r >= 2 && grid[r-1]?.[c]?.color === color && grid[r-2]?.[c]?.color === color) return true;
+  return false;
+}
+
+function initGrid() {
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    grid[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      let cell;
+      do {
+        cell = { color: Math.floor(Math.random() * COLORS), special: null, id: genId() };
+      } while (wouldMatch(c, r, cell.color));
+      grid[r][c] = cell;
+    }
+  }
+}
+
+let _idCounter = 0;
+function genId() { return ++_idCounter; }
+
+function initJelly() {
+  jelly = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  if (levelData.type === 'jelly') {
+    const count = Math.min(COLS * ROWS, 15 + level * 3);
+    let placed = 0;
+    const centerR = Math.floor(ROWS / 2), centerC = Math.floor(COLS / 2);
+    for (let dist = 0; dist < Math.max(ROWS, COLS) && placed < count; dist++) {
+      for (let r = 0; r < ROWS && placed < count; r++) {
+        for (let c = 0; c < COLS && placed < count; c++) {
+          if (Math.abs(r - centerR) + Math.abs(c - centerC) === dist && jelly[r][c] === 0) {
+            jelly[r][c] = level >= 5 ? 2 : 1;
+            placed++;
+          }
+        }
+      }
+    }
+  }
+}
+
+function jellyRemaining() {
+  let count = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      count += jelly[r][c];
+  return count;
+}
+
+function renderBackground() {
+  const existing = boardEl.querySelectorAll('.cell-bg, .jelly');
+  existing.forEach(e => e.remove());
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const bg = document.createElement('div');
+      bg.className = 'cell-bg ' + ((r + c) % 2 === 0 ? 'dark' : 'light');
+      bg.style.left = c * CELL + PAD + 'px';
+      bg.style.top = r * CELL + PAD + 'px';
+      bg.style.width = CELL + 'px';
+      bg.style.height = CELL + 'px';
+      boardEl.appendChild(bg);
+
+      if (jelly[r][c] > 0) {
+        const jEl = document.createElement('div');
+        jEl.className = 'jelly jelly-' + jelly[r][c];
+        jEl.style.left = c * CELL + PAD + 2 + 'px';
+        jEl.style.top = r * CELL + PAD + 2 + 'px';
+        jEl.style.width = CELL - 4 + 'px';
+        jEl.style.height = CELL - 4 + 'px';
+        jEl.id = 'jelly-' + r + '-' + c;
+        boardEl.appendChild(jEl);
+      }
+    }
+  }
+}
+
+function createPieceEl(cell) {
+  const el = document.createElement('div');
+  el.className = 'piece-el';
+  el.style.width = CELL + 'px';
+  el.style.height = CELL + 'px';
+  el.dataset.id = cell.id;
+
+  const fruit = document.createElement('div');
+  fruit.className = 'fruit';
+
+  if (cell.special === 'bomb') {
+    fruit.innerHTML = '\u{2B50}';
+    fruit.classList.add('bomb-fruit');
+  } else {
+    fruit.innerHTML = FRUIT_SVG[cell.color];
+  }
+  el.appendChild(fruit);
+
+  if (cell.special && cell.special !== 'bomb') {
+    const badge = document.createElement('div');
+    badge.className = 'special-badge badge-' + cell.special;
+    el.appendChild(badge);
+  }
+  if (cell.special === 'bomb') {
+    const badge = document.createElement('div');
+    badge.className = 'special-badge badge-bomb';
+    el.appendChild(badge);
+  }
+
+  return el;
+}
+
+function render(options = {}) {
+  const { animate = null, spawned = null } = options;
+  const oldEls = new Map();
+  boardEl.querySelectorAll('.piece-el').forEach(el => {
+    oldEls.set(el.dataset.id, el);
+  });
+
+  renderBackground();
+
+  const usedIds = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = grid[r][c];
+      if (!cell) continue;
+      usedIds.add(String(cell.id));
+
+      let el = oldEls.get(String(cell.id));
+      if (el) {
+        el.style.left = c * CELL + PAD + 'px';
+        if (animate === 'fall') {
+          el.classList.remove('swapping', 'clearing', 'spawning');
+          el.classList.add('falling');
+        } else if (animate === 'swap') {
+          el.classList.remove('falling', 'clearing', 'spawning');
+          el.classList.add('swapping');
+        } else {
+          el.classList.remove('falling', 'swapping', 'clearing', 'spawning');
+        }
+        el.style.top = r * CELL + PAD + 'px';
+
+        const oldFruit = el.querySelector('.fruit');
+        if (cell.special === 'bomb') {
+          oldFruit.innerHTML = '\u{2B50}';
+          oldFruit.classList.add('bomb-fruit');
+        } else {
+          oldFruit.innerHTML = FRUIT_SVG[cell.color];
+          oldFruit.classList.remove('bomb-fruit');
+        }
+
+        el.querySelectorAll('.special-badge').forEach(b => b.remove());
+        if (cell.special && cell.special !== 'bomb') {
+          const badge = document.createElement('div');
+          badge.className = 'special-badge badge-' + cell.special;
+          el.appendChild(badge);
+        }
+        if (cell.special === 'bomb') {
+          const badge = document.createElement('div');
+          badge.className = 'special-badge badge-bomb';
+          el.appendChild(badge);
+        }
+
+        if (selected && selected.c === c && selected.r === r) el.classList.add('selected');
+        else el.classList.remove('selected');
+
+        boardEl.appendChild(el);
+      } else {
+        el = createPieceEl(cell);
+        el.style.left = c * CELL + PAD + 'px';
+        el.style.top = r * CELL + PAD + 'px';
+        if (spawned && spawned.has(cell.id)) {
+          el.classList.add('spawning');
+        }
+        boardEl.appendChild(el);
+      }
+    }
+  }
+
+  oldEls.forEach((el, id) => {
+    if (!usedIds.has(id) && el.parentNode) {
+      el.parentNode.removeChild(el);
+    }
+  });
+}
+
+function renderClearing(indices) {
+  indices.forEach(idx => {
+    const r = Math.floor(idx / COLS), c = idx % COLS;
+    const cell = grid[r][c];
+    if (!cell) return;
+    const el = boardEl.querySelector(`[data-id="${cell.id}"]`);
+    if (el) {
+      el.classList.add('clearing');
+      spawnParticles(c, r, cell.color);
+    }
+  });
+}
+
+function spawnParticles(c, r, color) {
+  const colors = ['#ff5c8a','#ff8c00','#9b59b6','#3498db','#27ae60','#f1c40f'];
+  const cx = c * CELL + CELL/2 + PAD;
+  const cy = r * CELL + CELL/2 + PAD;
+  for (let i = 0; i < 6; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 4 + Math.random() * 4;
+    p.style.width = size + 'px';
+    p.style.height = size + 'px';
+    p.style.background = colors[color] || '#fff';
+    p.style.left = cx + 'px';
+    p.style.top = cy + 'px';
+    p.style.opacity = '1';
+    boardEl.appendChild(p);
+
+    const angle = (Math.PI * 2 / 6) * i + Math.random() * 0.5;
+    const dist = 20 + Math.random() * 30;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist;
+
+    p.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: `translate(${tx}px,${ty}px) scale(0)`, opacity: 0 }
+    ], { duration: 400 + Math.random() * 200, easing: 'ease-out', fill: 'forwards' })
+    .onfinish = () => p.remove();
+  }
+}
+
+function updateHUD() {
+  document.getElementById('moves-val').textContent = moves;
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('level-num').textContent = level;
+
+  if (levelData.type === 'jelly') {
+    const rem = jellyRemaining();
+    document.getElementById('target-val').textContent = rem;
+    document.getElementById('obj-info').textContent = rem > 0 ? `Clear all jelly • ${rem} left` : 'Jelly cleared!';
+  } else {
+    document.getElementById('target-val').textContent = levelData.target;
+    document.getElementById('obj-info').textContent = score >= levelData.target ? 'Target reached!' : `Reach ${levelData.target} points`;
+  }
+}
+
+// ---- DRAG HANDLING ----
+
+function setupDrag() {
+  boardEl.addEventListener('mousedown', onPointerDown);
+  boardEl.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('mousemove', onPointerMove);
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('mouseup', onPointerUp);
+  document.addEventListener('touchend', onTouchEnd);
+}
+
+function getCellFromPos(x, y) {
+  const rect = boardEl.getBoundingClientRect();
+  const c = Math.floor((x - rect.left - PAD) / CELL);
+  const r = Math.floor((y - rect.top - PAD) / CELL);
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return null;
+  return { c, r };
+}
+
+function onTouchStart(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  startDrag(t.clientX, t.clientY);
+}
+
+function onPointerDown(e) {
+  startDrag(e.clientX, e.clientY);
+}
+
+function startDrag(x, y) {
+  if (busy) return;
+  const pos = getCellFromPos(x, y);
+  if (!pos || !grid[pos.r][pos.c]) return;
+
+  if (selected) {
+    const dc = Math.abs(selected.c - pos.c);
+    const dr = Math.abs(selected.r - pos.r);
+    if (dc + dr === 1) {
+      const s = { ...selected };
+      selected = null;
+      render();
+      trySwap(s.c, s.r, pos.c, pos.r);
+      return;
+    }
+  }
+
+  dragState = {
+    startX: x, startY: y,
+    c: pos.c, r: pos.r,
+    moved: false
+  };
+
+  selected = { c: pos.c, r: pos.r };
+  render();
+
+  const el = boardEl.querySelector(`[data-id="${grid[pos.r][pos.c].id}"]`);
+  if (el) el.classList.add('dragging');
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  moveDrag(t.clientX, t.clientY);
+}
+
+function onPointerMove(e) {
+  moveDrag(e.clientX, e.clientY);
+}
+
+function moveDrag(x, y) {
+  if (!dragState || busy) return;
+  const dx = x - dragState.startX;
+  const dy = y - dragState.startY;
+  const threshold = CELL * 0.35;
+
+  if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+    dragState.moved = true;
+    let tc, tr;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      tc = dragState.c + (dx > 0 ? 1 : -1);
+      tr = dragState.r;
+    } else {
+      tc = dragState.c;
+      tr = dragState.r + (dy > 0 ? 1 : -1);
+    }
+
+    if (tc >= 0 && tc < COLS && tr >= 0 && tr < ROWS) {
+      const el = boardEl.querySelector(`[data-id="${grid[dragState.r][dragState.c]?.id}"]`);
+      if (el) el.classList.remove('dragging');
+      selected = null;
+      const ds = dragState;
+      dragState = null;
+      trySwap(ds.c, ds.r, tc, tr);
+    }
+  }
+}
+
+function onTouchEnd(e) { endDrag(); }
+function onPointerUp(e) { endDrag(); }
+
+function endDrag() {
+  if (!dragState) return;
+  const el = boardEl.querySelector(`[data-id="${grid[dragState.r]?.[dragState.c]?.id}"]`);
+  if (el) el.classList.remove('dragging');
+
+  if (!dragState.moved) {
+    // just a tap/click - keep selected state
+  }
+  dragState = null;
+}
+
+// ---- GAME LOGIC ----
+
+function swap(c1, r1, c2, r2) {
+  const temp = grid[r1][c1];
+  grid[r1][c1] = grid[r2][c2];
+  grid[r2][c2] = temp;
+}
+
+async function trySwap(c1, r1, c2, r2) {
+  busy = true;
+  swap(c1, r1, c2, r2);
+  render({ animate: 'swap' });
+  await sleep(220);
+
+  const combo = checkCombo(c1, r1, c2, r2);
+  if (combo) {
+    applyCombo(combo, c1, r1, c2, r2);
+    moves--;
+    cascadeCount = 0;
+    await resolveBoardLoop();
+    updateHUD();
+    checkWinLose();
+  } else {
+    const matches = findMatches();
+    if (matches.length > 0) {
+      moves--;
+      cascadeCount = 0;
+      await resolveBoardLoop();
+      updateHUD();
+      checkWinLose();
+    } else {
+      swap(c1, r1, c2, r2);
+      render({ animate: 'swap' });
+      await sleep(220);
+    }
+  }
+  busy = false;
+}
+
+function checkCombo(c1, r1, c2, r2) {
+  const a = grid[r1][c1], b = grid[r2][c2];
+  if (!a || !b) return null;
+  const sa = a.special, sb = b.special;
+  if (!sa && !sb) return null;
+
+  if (sa === 'bomb' && sb === 'bomb') return { type: 'bomb+bomb' };
+  if (sa === 'bomb' || sb === 'bomb') {
+    const other = sa === 'bomb' ? b : a;
+    const bombR = sa === 'bomb' ? r1 : r2;
+    const bombC = sa === 'bomb' ? c1 : c2;
+    if (other.special === 'striped-h' || other.special === 'striped-v')
+      return { type: 'bomb+striped', color: other.color, bombR, bombC };
+    if (other.special === 'wrapped')
+      return { type: 'bomb+wrapped', color: other.color, bombR, bombC };
+    return { type: 'bomb+normal', color: other.color, bombR, bombC };
+  }
+
+  const isStriped = s => s === 'striped-h' || s === 'striped-v';
+  if (isStriped(sa) && isStriped(sb)) return { type: 'striped+striped', r1, c1, r2, c2 };
+  if (sa === 'wrapped' && sb === 'wrapped') return { type: 'wrapped+wrapped', r1, c1, r2, c2 };
+  if ((isStriped(sa) && sb === 'wrapped') || (sa === 'wrapped' && isStriped(sb)))
+    return { type: 'striped+wrapped', r: (r1+r2)/2|0, c: (c1+c2)/2|0 };
+
+  return null;
+}
+
+function applyCombo(combo, c1, r1, c2, r2) {
+  const toClear = new Set();
+  const add = (r, c) => { if (r >= 0 && r < ROWS && c >= 0 && c < COLS) toClear.add(r * COLS + c); };
+
+  switch (combo.type) {
+    case 'bomb+bomb':
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) add(r, c);
+      break;
+    case 'bomb+normal':
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+        if (grid[r][c]?.color === combo.color) add(r, c);
+      add(combo.bombR, combo.bombC);
+      break;
+    case 'bomb+striped':
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+        if (grid[r][c]?.color === combo.color) {
+          add(r, c);
+          for (let cc = 0; cc < COLS; cc++) add(r, cc);
+          for (let rr = 0; rr < ROWS; rr++) add(rr, c);
+        }
+      add(combo.bombR, combo.bombC);
+      break;
+    case 'bomb+wrapped':
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+        if (grid[r][c]?.color === combo.color) {
+          add(r, c);
+          for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) add(r+dr, c+dc);
+        }
+      add(combo.bombR, combo.bombC);
+      break;
+    case 'striped+striped':
+      for (let c = 0; c < COLS; c++) { add(combo.r1, c); add(combo.r2, c); }
+      for (let r = 0; r < ROWS; r++) { add(r, combo.c1); add(r, combo.c2); }
+      break;
+    case 'wrapped+wrapped':
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+        add(combo.r1+dr, combo.c1+dc);
+        add(combo.r2+dr, combo.c2+dc);
+      }
+      break;
+    case 'striped+wrapped':
+      for (let d = -1; d <= 1; d++) {
+        for (let c = 0; c < COLS; c++) add(combo.r+d, c);
+        for (let r = 0; r < ROWS; r++) add(r, combo.c+d);
+      }
+      break;
+  }
+
+  renderClearing([...toClear]);
+  let pts = 0;
+  toClear.forEach(idx => {
+    const r = Math.floor(idx / COLS), c = idx % COLS;
+    if (grid[r][c]) {
+      grid[r][c] = null;
+      pts += 20;
+      if (jelly[r][c] > 0) { jelly[r][c]--; pts += 50; }
+    }
+  });
+  score += pts;
+  showFloatingText(c1, r1, pts);
+}
+
+function findMatches() {
+  const matched = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS - 2; c++) {
+      if (grid[r][c] && grid[r][c+1] && grid[r][c+2] &&
+          grid[r][c].color === grid[r][c+1].color && grid[r][c].color === grid[r][c+2].color) {
+        let end = c + 2;
+        while (end+1 < COLS && grid[r][end+1]?.color === grid[r][c].color) end++;
+        for (let i = c; i <= end; i++) matched.add(r * COLS + i);
+      }
+    }
+  }
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS - 2; r++) {
+      if (grid[r][c] && grid[r+1][c] && grid[r+2][c] &&
+          grid[r][c].color === grid[r+1][c].color && grid[r][c].color === grid[r+2][c].color) {
+        let end = r + 2;
+        while (end+1 < ROWS && grid[end+1]?.[c]?.color === grid[r][c].color) end++;
+        for (let i = r; i <= end; i++) matched.add(i * COLS + c);
+      }
+    }
+  }
+  return [...matched];
+}
+
+function findMatchGroups() {
+  const groups = [];
+  for (let r = 0; r < ROWS; r++) {
+    let c = 0;
+    while (c < COLS) {
+      if (!grid[r][c]) { c++; continue; }
+      let end = c;
+      while (end+1 < COLS && grid[r][end+1]?.color === grid[r][c].color) end++;
+      if (end - c >= 2) {
+        groups.push({ cells: [], color: grid[r][c].color, dir: 'h' });
+        for (let i = c; i <= end; i++) groups[groups.length-1].cells.push({ r, c: i });
+      }
+      c = end + 1;
+    }
+  }
+  for (let c = 0; c < COLS; c++) {
+    let r = 0;
+    while (r < ROWS) {
+      if (!grid[r][c]) { r++; continue; }
+      let end = r;
+      while (end+1 < ROWS && grid[end+1]?.[c]?.color === grid[r][c].color) end++;
+      if (end - r >= 2) {
+        groups.push({ cells: [], color: grid[r][c].color, dir: 'v' });
+        for (let i = r; i <= end; i++) groups[groups.length-1].cells.push({ r: i, c });
+      }
+      r = end + 1;
+    }
+  }
+  return groups;
+}
+
+function detectSpecials(groups) {
+  const specials = [];
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i+1; j < groups.length; j++) {
+      if (groups[i].color !== groups[j].color) continue;
+      const overlap = groups[i].cells.find(a => groups[j].cells.some(b => a.r === b.r && a.c === b.c));
+      if (overlap) {
+        const combined = new Set();
+        groups[i].cells.forEach(p => combined.add(p.r+','+p.c));
+        groups[j].cells.forEach(p => combined.add(p.r+','+p.c));
+        if (combined.size >= 5) {
+          specials.push({ r: overlap.r, c: overlap.c, type: 'wrapped', color: groups[i].color });
+          groups[i].used = true; groups[j].used = true;
+        }
+      }
+    }
+  }
+  groups.forEach(g => {
+    if (g.used) return;
+    if (g.cells.length >= 5) {
+      const mid = g.cells[Math.floor(g.cells.length/2)];
+      specials.push({ r: mid.r, c: mid.c, type: 'bomb', color: -1 });
+      g.used = true;
+    } else if (g.cells.length === 4) {
+      const mid = g.cells[1];
+      specials.push({ r: mid.r, c: mid.c, type: g.dir === 'h' ? 'striped-v' : 'striped-h', color: g.color });
+      g.used = true;
+    }
+  });
+  return specials;
+}
+
+function activateSpecial(special, r, c, toClear) {
+  switch (special) {
+    case 'striped-h':
+      for (let cc = 0; cc < COLS; cc++) toClear.add(r * COLS + cc); break;
+    case 'striped-v':
+      for (let rr = 0; rr < ROWS; rr++) toClear.add(rr * COLS + c); break;
+    case 'wrapped':
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++)
+        if (r+dr >= 0 && r+dr < ROWS && c+dc >= 0 && c+dc < COLS)
+          toClear.add((r+dr)*COLS+(c+dc));
+      break;
+    case 'bomb':
+      const targetColor = grid[r][c]?.color;
+      if (targetColor != null && targetColor >= 0)
+        for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++)
+          if (grid[rr][cc]?.color === targetColor) toClear.add(rr*COLS+cc);
+      break;
+  }
+}
+
+function clearAndSpawnSpecials() {
+  const groups = findMatchGroups();
+  if (groups.length === 0) return false;
+
+  const specials = detectSpecials(groups);
+  const toClear = new Set();
+  const triggerSpecials = new Set();
+
+  groups.forEach(g => g.cells.forEach(p => {
+    const idx = p.r * COLS + p.c;
+    toClear.add(idx);
+    if (grid[p.r][p.c]?.special) triggerSpecials.add(idx);
+  }));
+
+  triggerSpecials.forEach(idx => {
+    const r = Math.floor(idx/COLS), c = idx % COLS;
+    const cell = grid[r][c];
+    if (!cell) return;
+    activateSpecial(cell.special, r, c, toClear);
+  });
+
+  renderClearing([...toClear]);
+
+  let pts = 0;
+  const basePoints = 30 + cascadeCount * 20;
+  toClear.forEach(idx => {
+    const r = Math.floor(idx/COLS), c = idx % COLS;
+    if (grid[r][c]) {
+      const isSpecialSpot = specials.some(s => s.r === r && s.c === c);
+      if (!isSpecialSpot) grid[r][c] = null;
+      pts += basePoints;
+      if (jelly[r][c] > 0) { jelly[r][c]--; pts += 100; }
+    }
+  });
+
+  specials.forEach(s => {
+    grid[s.r][s.c] = { color: s.color === -1 ? 0 : s.color, special: s.type, id: genId() };
+    if (s.type === 'bomb') grid[s.r][s.c].color = -1;
+  });
+
+  score += pts;
+  if (pts > 0) {
+    const cells = [...toClear];
+    const idx = cells[Math.floor(cells.length/2)];
+    showFloatingText(idx % COLS, Math.floor(idx/COLS), pts);
+  }
+  return true;
+}
+
+function applyGravity() {
+  let moved = false;
+  const spawned = new Set();
+  for (let c = 0; c < COLS; c++) {
+    let writePos = ROWS - 1;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (grid[r][c]) {
+        if (r !== writePos) {
+          grid[writePos][c] = grid[r][c];
+          grid[r][c] = null;
+          moved = true;
+        }
+        writePos--;
+      }
+    }
+    for (let r = writePos; r >= 0; r--) {
+      const newCell = { color: Math.floor(Math.random() * COLORS), special: null, id: genId() };
+      grid[r][c] = newCell;
+      spawned.add(newCell.id);
+      moved = true;
+    }
+  }
+  return { moved, spawned };
+}
+
+async function resolveBoardLoop() {
+  while (true) {
+    const cleared = clearAndSpawnSpecials();
+    if (!cleared) { render(); updateHUD(); break; }
+    await sleep(350);
+    const { moved, spawned } = applyGravity();
+    render({ animate: 'fall', spawned });
+    updateHUD();
+    await sleep(350);
+    cascadeCount++;
+  }
+}
+
+function hasValidMoves() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (c+1 < COLS) {
+        swap(c, r, c+1, r);
+        if (findMatches().length > 0 || checkCombo(c, r, c+1, r)) { swap(c, r, c+1, r); return true; }
+        swap(c, r, c+1, r);
+      }
+      if (r+1 < ROWS) {
+        swap(c, r, c, r+1);
+        if (findMatches().length > 0 || checkCombo(c, r, c, r+1)) { swap(c, r, c, r+1); return true; }
+        swap(c, r, c, r+1);
+      }
+    }
+  }
+  return false;
+}
+
+function shuffleBoard() {
+  const pieces = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c]) pieces.push(grid[r][c]);
+  for (let i = pieces.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [pieces[i],pieces[j]] = [pieces[j],pieces[i]]; }
+  let idx = 0;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid[r][c] = pieces[idx++];
+}
+
+function checkWinLose() {
+  const won = levelData.type === 'score' ? score >= levelData.target : jellyRemaining() === 0;
+  if (won) {
+    busy = true;
+    const stars = levelData.type === 'score'
+      ? (score >= levelData.target*3 ? 3 : score >= levelData.target*2 ? 2 : 1)
+      : (moves >= 10 ? 3 : moves >= 5 ? 2 : 1);
+    setTimeout(() => showOverlay('Level Complete!',
+      `<div class="stars">${'<span class="star-on">&#9733;</span>'.repeat(stars)}${'<span class="star-off">&#9733;</span>'.repeat(3-stars)}</div><p>Score: ${score}</p>`,
+      'Next Level', () => { level++; startLevel(); }), 500);
+    return;
+  }
+  if (moves <= 0) {
+    busy = true;
+    setTimeout(() => showOverlay('Out of Moves',
+      `<p>Score: ${score}</p>`, 'Try Again', () => startLevel()), 500);
+    return;
+  }
+  if (!hasValidMoves()) { shuffleBoard(); render(); }
+}
+
+function showOverlay(title, bodyHTML, btnText, onClick) {
+  overlayEl.innerHTML = `<h1 class="title-gradient">${title}</h1>${bodyHTML}<button class="btn" id="overlay-btn">${btnText}</button>`;
+  overlayEl.style.display = 'flex';
+  document.getElementById('overlay-btn').addEventListener('click', () => {
+    overlayEl.style.display = 'none';
+    onClick();
+  });
+}
+
+function showFloatingText(c, r, pts) {
+  const el = document.createElement('div');
+  el.className = 'combo-text';
+  el.textContent = '+' + pts;
+  el.style.left = (c * CELL + CELL/2 - 20 + PAD) + 'px';
+  el.style.top = (r * CELL + PAD) + 'px';
+  boardEl.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function startLevel() {
+  levelData = getLevel(level);
+  moves = levelData.moves;
+  score = 0;
+  selected = null;
+  busy = false;
+  initGrid();
+  initJelly();
+  while (findMatches().length > 0) initGrid();
+  render();
+  updateHUD();
+}
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  overlayEl.style.display = 'none';
+  level = 1;
+  startLevel();
+});
+
+setupDrag();
+</script>
+</body>
+</html>
