@@ -2,41 +2,175 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Fruit Crush</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --cell: 52px;
+  --cols: 8;
+  --rows: 9;
+}
+
+@media (max-width: 500px) {
+  :root { --cell: 42px; }
+}
+
+@media (max-width: 380px) {
+  :root { --cell: 36px; }
+}
+
 body {
-  background: #0c0e1a;
-  background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 30%, rgba(40,100,220,0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 90%, rgba(200,50,120,0.1) 0%, transparent 50%);
+  background: #080b1a;
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
   font-family: 'Segoe UI', Tahoma, sans-serif;
   color: #fff;
-  overflow: hidden;
+  overflow-x: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
-.game-container {
+.bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ===== SCREENS ===== */
+.screen { display: none; flex-direction: column; align-items: center; width: 100%; position: relative; }
+.screen.active { display: flex; }
+
+/* ===== MAP SCREEN ===== */
+#map-screen {
+  padding: 20px;
+  gap: 16px;
+  min-height: 100vh;
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding-top: 30px;
+}
+
+.map-title {
+  font-size: 40px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ff5c8a, #ffcc00, #44e5a0, #5ca0ff);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradShift 4s ease infinite;
+  margin-bottom: 8px;
+}
+
+.map-road {
+  position: relative;
+  width: 320px;
+  padding-bottom: 30px;
+}
+
+.map-path-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.map-node {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  cursor: pointer;
+  border: 3px solid rgba(255,255,255,0.1);
+  background: rgba(20,20,40,0.8);
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+  z-index: 1;
+  backdrop-filter: blur(4px);
+}
+
+.map-node:hover { transform: scale(1.15); }
+.map-node:active { transform: scale(0.95); }
+
+.map-node.locked {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: rgba(255,255,255,0.05);
+}
+
+.map-node.current {
+  border-color: #ff5c8a;
+  box-shadow: 0 0 24px rgba(255,92,138,0.5), 0 0 60px rgba(255,92,138,0.15);
+  background: rgba(255,92,138,0.15);
+  animation: currentPulse 2s ease-in-out infinite;
+}
+
+@keyframes currentPulse {
+  0%, 100% { box-shadow: 0 0 24px rgba(255,92,138,0.5), 0 0 60px rgba(255,92,138,0.15); }
+  50% { box-shadow: 0 0 32px rgba(255,92,138,0.7), 0 0 80px rgba(255,92,138,0.25); }
+}
+
+.map-node.completed {
+  border-color: #44e5a0;
+  background: rgba(68,229,160,0.12);
+  box-shadow: 0 0 12px rgba(68,229,160,0.2);
+}
+
+.map-stars {
+  position: absolute;
+  bottom: -14px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.map-icon {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 2;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.15);
+  line-height: 1;
+}
+
+/* ===== GAME SCREEN ===== */
+#game-screen {
+  gap: 8px;
+  padding: 10px;
+  justify-content: flex-start;
+  padding-top: 14px;
+  min-height: 100vh;
 }
 
 .hud {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
   background: rgba(255,255,255,0.04);
-  padding: 10px 28px;
-  border-radius: 16px;
+  padding: 8px 20px;
+  border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(10px);
 }
@@ -45,21 +179,20 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 72px;
+  min-width: 60px;
 }
 
 .hud-label {
-  font-size: 10px;
+  font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.3);
   font-weight: 600;
 }
 
 .hud-value {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.5px;
 }
 
 #moves-val { color: #ff5c8a; }
@@ -74,29 +207,130 @@ body {
   font-weight: 600;
 }
 
+.obj-info {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
 .board-frame {
-  padding: 6px;
-  border-radius: 18px;
+  padding: 5px;
+  border-radius: 16px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
-  backdrop-filter: blur(8px);
 }
 
 #board {
   position: relative;
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(0,0,0,0.35);
   overflow: hidden;
+  width: calc(var(--cols) * var(--cell) + 6px);
+  height: calc(var(--rows) * var(--cell) + 6px);
 }
 
+.board-shake {
+  animation: shake 0.4s ease-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate(0,0) rotate(0); }
+  15% { transform: translate(-4px, 2px) rotate(-0.5deg); }
+  30% { transform: translate(4px, -2px) rotate(0.5deg); }
+  45% { transform: translate(-3px, 1px) rotate(-0.3deg); }
+  60% { transform: translate(3px, -1px) rotate(0.3deg); }
+  75% { transform: translate(-1px, 1px); }
+}
+
+/* ===== BOOSTERS ===== */
+.booster-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.booster-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  position: relative;
+  font-size: 20px;
+}
+
+.booster-btn:hover {
+  transform: scale(1.1);
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+}
+
+.booster-btn:active { transform: scale(0.95); }
+
+.booster-btn.active {
+  border-color: #ff5c8a;
+  background: rgba(255,92,138,0.15);
+  box-shadow: 0 0 12px rgba(255,92,138,0.3);
+}
+
+.booster-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ff5c8a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 440px;
+  padding: 0 4px;
+}
+
+.top-bar-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.top-bar-btn:hover { transform: scale(1.1); }
+.top-bar-btn:active { transform: scale(0.95); }
+
+/* ===== PIECES ===== */
 .cell-bg {
   position: absolute;
-  border-radius: 10px;
+  border-radius: 8px;
   pointer-events: none;
 }
-
 .cell-bg.dark { background: rgba(255,255,255,0.015); }
-.cell-bg.light { background: rgba(255,255,255,0.03); }
+.cell-bg.light { background: rgba(255,255,255,0.035); }
 
 .piece-el {
   position: absolute;
@@ -106,139 +340,128 @@ body {
   cursor: grab;
   z-index: 1;
   will-change: transform, left, top;
+  width: var(--cell);
+  height: var(--cell);
 }
 
-.piece-el.dragging {
-  z-index: 10;
-  cursor: grabbing;
-  filter: brightness(1.2);
-}
-
-.piece-el.selected .fruit {
-  animation: pulse 0.6s ease-in-out infinite alternate;
-}
-
+.piece-el.dragging { z-index: 10; cursor: grabbing; filter: brightness(1.2); }
+.piece-el.selected .fruit { animation: pulse 0.6s ease-in-out infinite alternate; }
 .piece-el.swapping {
-  transition: left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: left 0.22s cubic-bezier(0.34,1.56,0.64,1), top 0.22s cubic-bezier(0.34,1.56,0.64,1);
 }
-
-.piece-el.falling {
-  transition: top 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-.piece-el.clearing {
-  animation: pop 0.35s ease-out forwards;
-  pointer-events: none;
-}
-
-.piece-el.spawning {
-  animation: spawnIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
+.piece-el.falling { transition: top 0.35s cubic-bezier(0.22,0.61,0.36,1); }
+.piece-el.clearing { animation: pop 0.35s ease-out forwards; pointer-events: none; }
+.piece-el.spawning { animation: spawnIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 
 .fruit {
-  font-size: 34px;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 30px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
   line-height: 1;
-  image-rendering: pixelated;
 }
 
-.piece-el:hover .fruit { transform: scale(1.12); }
+@media (max-width: 500px) { .fruit { font-size: 26px; } }
+@media (max-width: 380px) { .fruit { font-size: 22px; } }
+
+.piece-el:hover .fruit { transform: scale(1.1); }
 .piece-el.dragging .fruit { transform: scale(1.2); }
 
-.special-badge {
+.special-indicator {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ind-striped-h {
+  background: linear-gradient(0deg, transparent 40%, rgba(255,255,255,0.3) 48%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.3) 52%, transparent 60%);
+}
+
+.ind-striped-v {
+  background: linear-gradient(90deg, transparent 40%, rgba(255,255,255,0.3) 48%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.3) 52%, transparent 60%);
+}
+
+.ind-wrapped {
+  border: 3px solid rgba(255,200,50,0.6);
+  box-shadow: inset 0 0 8px rgba(255,200,50,0.3);
+}
+
+.ind-bomb {
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+  box-shadow: 0 0 14px rgba(255,255,255,0.4);
+}
+
+/* Chocolate */
+.chocolate-cell {
+  position: absolute;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #5a3825, #3d2517);
+  border: 2px solid #6b4430;
+  pointer-events: none;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chocolate-cell::after {
+  content: '';
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  background: rgba(90,56,37,0.8);
+  border: 1px solid rgba(107,68,48,0.6);
+}
+
+/* Countdown bomb overlay */
+.bomb-countdown {
   position: absolute;
   bottom: 2px;
   right: 2px;
-  font-size: 12px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
   width: 18px;
   height: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  pointer-events: none;
-  z-index: 2;
+  z-index: 3;
+  box-shadow: 0 0 8px rgba(231,76,60,0.6);
 }
 
-.badge-striped-h {
-  background: rgba(255,255,255,0.85);
-  color: #333;
-}
-.badge-striped-h::after { content: '\2194'; font-size: 11px; }
-
-.badge-striped-v {
-  background: rgba(255,255,255,0.85);
-  color: #333;
-}
-.badge-striped-v::after { content: '\2195'; font-size: 11px; }
-
-.badge-wrapped {
-  background: rgba(255,100,50,0.9);
-  color: #fff;
-}
-.badge-wrapped::after { content: '\2738'; font-size: 10px; }
-
-.badge-bomb {
-  background: radial-gradient(circle, #fff, #aaa);
-  color: #222;
-  width: 22px;
-  height: 22px;
-  bottom: 0;
-  right: 0;
-  border: 2px solid rgba(255,255,255,0.6);
-  box-shadow: 0 0 12px rgba(255,255,255,0.5);
-}
-.badge-bomb::after { content: '\2605'; font-size: 12px; }
-
-.bomb-fruit {
-  font-size: 36px !important;
-  filter: drop-shadow(0 0 12px rgba(255,255,255,0.7)) drop-shadow(0 2px 6px rgba(0,0,0,0.5)) !important;
-}
-
+/* Jelly */
 .jelly {
   position: absolute;
-  border-radius: 10px;
+  border-radius: 8px;
   pointer-events: none;
   z-index: 0;
 }
-.jelly-1 {
-  background: rgba(180,80,255,0.12);
-  border: 1.5px solid rgba(180,80,255,0.25);
-  box-shadow: inset 0 0 12px rgba(180,80,255,0.1);
-}
-.jelly-2 {
-  background: rgba(180,80,255,0.22);
-  border: 2px solid rgba(180,80,255,0.4);
-  box-shadow: inset 0 0 16px rgba(180,80,255,0.15);
-}
+.jelly-1 { background: rgba(180,80,255,0.12); border: 1.5px solid rgba(180,80,255,0.25); }
+.jelly-2 { background: rgba(180,80,255,0.22); border: 2px solid rgba(180,80,255,0.4); }
 
+/* ===== OVERLAY ===== */
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(8,8,20,0.85);
-  display: flex;
+  background: rgba(8,8,20,0.88);
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 18px;
   z-index: 100;
   backdrop-filter: blur(12px);
 }
 
-.overlay h1 {
-  font-size: 48px;
-  font-weight: 800;
-  letter-spacing: -1px;
-}
+.overlay.visible { display: flex; }
 
-.title-gradient {
-  background: linear-gradient(135deg, #ff5c8a, #ffcc00, #44e5a0, #5ca0ff);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradShift 4s ease infinite;
+.overlay h1 {
+  font-size: 42px;
+  font-weight: 800;
 }
 
 @keyframes gradShift {
@@ -248,45 +471,67 @@ body {
 
 .overlay p {
   color: rgba(255,255,255,0.5);
-  font-size: 15px;
-  max-width: 340px;
+  font-size: 14px;
+  max-width: 320px;
   text-align: center;
   line-height: 1.6;
 }
 
 .btn {
-  padding: 14px 48px;
-  font-size: 16px;
+  padding: 13px 44px;
+  font-size: 15px;
   font-weight: 700;
   border: none;
   border-radius: 12px;
   cursor: pointer;
   color: #fff;
   background: linear-gradient(135deg, #ff5c8a, #ff3366);
-  box-shadow: 0 4px 20px rgba(255,60,102,0.35);
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  box-shadow: 0 4px 20px rgba(255,60,102,0.3);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
-.btn:hover {
-  transform: scale(1.06);
-  box-shadow: 0 6px 28px rgba(255,60,102,0.5);
+.btn:hover { transform: scale(1.06); box-shadow: 0 6px 28px rgba(255,60,102,0.5); }
+.btn:active { transform: scale(0.96); }
+.btn-secondary {
+  background: rgba(255,255,255,0.08);
+  box-shadow: none;
+  border: 1px solid rgba(255,255,255,0.12);
 }
-.btn:active { transform: scale(0.98); }
+.btn-secondary:hover { background: rgba(255,255,255,0.12); box-shadow: none; }
 
-.stars { font-size: 40px; letter-spacing: 10px; }
+.stars { font-size: 36px; letter-spacing: 10px; }
 .star-on { color: #ffcc00; text-shadow: 0 0 14px rgba(255,204,0,0.5); }
 .star-off { color: rgba(255,255,255,0.1); }
 
 .combo-text {
   position: absolute;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   color: #ffcc00;
-  text-shadow: 0 0 12px rgba(255,204,0,0.6), 0 2px 4px rgba(0,0,0,0.5);
+  text-shadow: 0 0 10px rgba(255,204,0,0.6), 0 2px 4px rgba(0,0,0,0.5);
   pointer-events: none;
   z-index: 50;
   animation: floatUp 0.9s ease-out forwards;
+}
+
+.cascade-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  font-weight: 800;
+  pointer-events: none;
+  z-index: 55;
+  animation: cascadePop 0.8s ease-out forwards;
+  text-shadow: 0 0 20px currentColor;
+}
+
+@keyframes cascadePop {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%,-50%) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(0.8) translateY(-30px); }
 }
 
 @keyframes floatUp {
@@ -308,15 +553,8 @@ body {
 
 @keyframes spawnIn {
   0% { transform: scale(0); opacity: 0; }
-  60% { transform: scale(1.15); opacity: 1; }
+  60% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
-}
-
-.obj-info {
-  font-size: 12px;
-  color: rgba(255,255,255,0.35);
-  text-align: center;
-  letter-spacing: 0.5px;
 }
 
 .particle {
@@ -325,89 +563,974 @@ body {
   pointer-events: none;
   z-index: 40;
 }
+
+/* Collect target icons */
+.collect-targets {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.collect-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.collect-icon { font-size: 20px; }
+
+/* ===== QUIZ SHOP ===== */
+#shop-screen {
+  padding: 20px;
+  gap: 18px;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.shop-title {
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffcc00, #ff8c00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shop-subtitle {
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  text-align: center;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.shop-inventory {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 6px;
+}
+
+.shop-inv-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 10px 16px;
+  min-width: 72px;
+}
+
+.shop-inv-icon { font-size: 24px; }
+.shop-inv-count { font-size: 18px; font-weight: 700; color: #ffcc00; }
+.shop-inv-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.3); }
+
+.quiz-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quiz-reward {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+}
+
+.quiz-reward-badge {
+  background: linear-gradient(135deg, #ffcc00, #ff8c00);
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.quiz-question {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #eee;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-opt {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: transform 0.12s, border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ddd;
+}
+
+.quiz-opt:hover {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06);
+  transform: scale(1.02);
+}
+
+.quiz-opt .opt-letter {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.quiz-opt.correct {
+  border-color: #44e5a0;
+  background: rgba(68,229,160,0.15);
+}
+
+.quiz-opt.correct .opt-letter {
+  background: #44e5a0;
+  color: #000;
+}
+
+.quiz-opt.wrong {
+  border-color: #ff5c8a;
+  background: rgba(255,92,138,0.12);
+}
+
+.quiz-opt.wrong .opt-letter {
+  background: #ff5c8a;
+  color: #fff;
+}
+
+.quiz-opt.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.quiz-result {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px;
+  border-radius: 10px;
+  display: none;
+}
+
+.quiz-result.show { display: block; }
+.quiz-result.win { color: #44e5a0; background: rgba(68,229,160,0.1); }
+.quiz-result.lose { color: #ff5c8a; background: rgba(255,92,138,0.1); }
+
+.shop-back-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+  z-index: 60;
+}
+
+.shop-back-btn:hover { transform: scale(1.1); }
+
+.map-shop-btn {
+  padding: 12px 32px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #000;
+  background: linear-gradient(135deg, #ffcc00, #ff8c00);
+  box-shadow: 0 4px 20px rgba(255,180,0,0.3);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.map-shop-btn:hover { transform: scale(1.06); }
+.map-shop-btn:active { transform: scale(0.96); }
+
+/* ===== HINT SYSTEM ===== */
+.hint-pulse {
+  animation: hintPulse 0.6s ease-in-out infinite alternate;
+  z-index: 5;
+}
+@keyframes hintPulse {
+  0% { filter: brightness(1) drop-shadow(0 0 0px transparent); }
+  100% { filter: brightness(1.5) drop-shadow(0 0 12px #ffcc00); }
+}
+
+/* ===== DAILY CHALLENGE ===== */
+.map-daily-btn {
+  padding: 12px 32px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #ff5c8a, #b050ff);
+  box-shadow: 0 4px 20px rgba(176,80,255,0.3);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.map-daily-btn:hover { transform: scale(1.06); }
+.map-daily-btn:active { transform: scale(0.96); }
+.map-daily-btn.completed-today {
+  opacity: 0.5;
+  background: linear-gradient(135deg, #44e5a0, #2a8a5a);
+}
+
+/* ===== TIMED MODE ===== */
+.map-timed-btn {
+  padding: 12px 32px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #5ca0ff, #3366ff);
+  box-shadow: 0 4px 20px rgba(51,102,255,0.3);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.map-timed-btn:hover { transform: scale(1.06); }
+.map-timed-btn:active { transform: scale(0.96); }
+
+#timed-screen {
+  padding: 10px;
+  gap: 10px;
+  justify-content: center;
+  min-height: 100vh;
+}
+.timed-hud {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: rgba(255,255,255,0.04);
+  padding: 8px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+}
+.timed-timer {
+  font-size: 28px;
+  font-weight: 800;
+  color: #5ca0ff;
+}
+.timed-timer.low { color: #ff5c8a; animation: pulse 0.5s infinite alternate; }
+
+/* ===== LEADERBOARD ===== */
+#leaderboard-screen {
+  padding: 20px;
+  gap: 16px;
+  justify-content: flex-start;
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-top: 30px;
+}
+.lb-title {
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffcc00, #ff5c8a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.lb-list {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+.lb-row .lb-level { font-weight: 700; color: #ffcc00; min-width: 60px; }
+.lb-row .lb-score { color: #44e5a0; font-weight: 600; }
+.map-lb-btn, .map-achieve-btn {
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: transform 0.15s;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.map-lb-btn:hover, .map-achieve-btn:hover { transform: scale(1.06); background: rgba(255,255,255,0.12); }
+.map-btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ===== ACHIEVEMENTS ===== */
+#achieve-screen {
+  padding: 20px;
+  gap: 16px;
+  justify-content: flex-start;
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-top: 30px;
+}
+.achieve-title {
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #44e5a0, #5ca0ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.achieve-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 380px;
+  width: 100%;
+}
+.achieve-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.achieve-card.unlocked {
+  border-color: #ffcc00;
+  background: rgba(255,204,0,0.08);
+}
+.achieve-card.locked { opacity: 0.4; }
+.achieve-icon { font-size: 28px; }
+.achieve-name { font-size: 12px; font-weight: 700; }
+.achieve-desc { font-size: 10px; color: rgba(255,255,255,0.4); }
+.achieve-progress { font-size: 10px; color: #ffcc00; font-weight: 600; }
+
+/* ===== QUIZ CATEGORY SELECTOR ===== */
+.quiz-cat-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.quiz-cat-btn {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(255,255,255,0.04);
+  transition: transform 0.12s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.quiz-cat-btn:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.25); }
+.quiz-cat-btn.active { border-color: #ffcc00; background: rgba(255,204,0,0.12); color: #ffcc00; }
+
+.map-best-score {
+  position: absolute;
+  bottom: -22px;
+  font-size: 8px;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+  font-weight: 600;
+}
 </style>
 </head>
 <body>
 
-<div class="game-container">
-  <div class="level-label">Level <span id="level-num">1</span></div>
+<!-- ===== ANIMATED BG ===== -->
+<canvas class="bg-canvas" id="bg-canvas"></canvas>
+
+<!-- ===== MAP SCREEN ===== -->
+<div class="screen active" id="map-screen">
+  <div class="map-title">Fruit Crush</div>
+  <p style="color:rgba(255,255,255,0.35); font-size:12px; letter-spacing:1px;">TAP A LEVEL TO PLAY</p>
+  <button class="map-shop-btn" id="open-shop-btn">⚽ Quiz Shop — Earn Boosters</button>
+  <button class="map-daily-btn" id="daily-btn">🌟 Daily Challenge</button>
+  <button class="map-timed-btn" id="timed-btn">⏱️ Timed Mode</button>
+  <div class="map-btn-row">
+    <button class="map-lb-btn" id="lb-btn">🏆 Leaderboard</button>
+    <button class="map-achieve-btn" id="achieve-btn">🎖️ Achievements</button>
+  </div>
+  <div class="map-road" id="map-road"></div>
+</div>
+
+<!-- ===== SHOP SCREEN ===== -->
+<div class="screen" id="shop-screen">
+  <button class="shop-back-btn" id="shop-back-btn">&#x2190;</button>
+  <div class="shop-title">⚽ Quiz Shop</div>
+  <div class="shop-subtitle">Answer trivia to earn boosters! Pick a category & reward, then answer correctly to claim it.</div>
+  <div class="quiz-cat-row">
+    <button class="quiz-cat-btn active" data-cat="worldcup">⚽ World Cup</button>
+    <button class="quiz-cat-btn" data-cat="nba">🏀 NBA</button>
+    <button class="quiz-cat-btn" data-cat="nfl">🏈 NFL</button>
+    <button class="quiz-cat-btn" data-cat="geography">🌍 Geography</button>
+    <button class="quiz-cat-btn" data-cat="music">🎵 Music</button>
+  </div>
+  <div class="shop-inventory">
+    <div class="shop-inv-item"><div class="shop-inv-icon">🔨</div><div class="shop-inv-count" id="shop-hammer">3</div><div class="shop-inv-label">Hammer</div></div>
+    <div class="shop-inv-item"><div class="shop-inv-icon">🔀</div><div class="shop-inv-count" id="shop-shuffle">2</div><div class="shop-inv-label">Shuffle</div></div>
+    <div class="shop-inv-item"><div class="shop-inv-icon">➕</div><div class="shop-inv-count" id="shop-moves">1</div><div class="shop-inv-label">+5 Moves</div></div>
+    <div class="shop-inv-item"><div class="shop-inv-icon">💡</div><div class="shop-inv-count" id="shop-hint">3</div><div class="shop-inv-label">Hint</div></div>
+  </div>
+  <div class="quiz-card" id="quiz-card">
+    <div class="quiz-reward">Reward: <span class="quiz-reward-badge" id="quiz-reward-badge">🔨 +1 Hammer</span></div>
+    <div class="quiz-question" id="quiz-question"></div>
+    <div class="quiz-options" id="quiz-options"></div>
+    <div class="quiz-result" id="quiz-result"></div>
+    <button class="btn" id="quiz-next" style="display:none;">Next Question</button>
+  </div>
+  <div style="display:flex; gap:8px; margin-top:6px;">
+    <button class="btn btn-secondary" id="pick-hammer" style="font-size:13px; padding:10px 18px;">Win 🔨</button>
+    <button class="btn btn-secondary" id="pick-shuffle" style="font-size:13px; padding:10px 18px;">Win 🔀</button>
+    <button class="btn btn-secondary" id="pick-moves" style="font-size:13px; padding:10px 18px;">Win ➕</button>
+    <button class="btn btn-secondary" id="pick-hint" style="font-size:13px; padding:10px 18px;">Win 💡</button>
+  </div>
+</div>
+
+<!-- ===== GAME SCREEN ===== -->
+<div class="screen" id="game-screen">
+  <div class="game-top-bar">
+    <button class="top-bar-btn" id="back-btn" title="Back to map">&#x2190;</button>
+    <div class="level-label">Level <span id="level-num">1</span></div>
+    <button class="top-bar-btn" id="sound-btn" title="Toggle sound">🔊</button>
+  </div>
   <div class="hud">
     <div class="hud-item"><span class="hud-label">Moves</span><span class="hud-value" id="moves-val">20</span></div>
     <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="score-val">0</span></div>
     <div class="hud-item"><span class="hud-label">Target</span><span class="hud-value" id="target-val">1000</span></div>
   </div>
-  <div class="obj-info" id="obj-info">Reach the target score!</div>
+  <div class="obj-info" id="obj-info"></div>
+  <div id="collect-display" class="collect-targets" style="display:none;"></div>
   <div class="board-frame">
     <div id="board"></div>
   </div>
+  <div class="booster-bar">
+    <div class="booster-btn" id="boost-hammer" title="Hammer: destroy one piece">🔨<span class="booster-count" id="hammer-count">3</span></div>
+    <div class="booster-btn" id="boost-shuffle" title="Shuffle the board">🔀<span class="booster-count" id="shuffle-count">2</span></div>
+    <div class="booster-btn" id="boost-moves" title="+5 moves">➕<span class="booster-count" id="moves-plus-count">1</span></div>
+    <div class="booster-btn" id="boost-hint" title="Hint: show a valid move">💡<span class="booster-count" id="hint-count">3</span></div>
+  </div>
 </div>
 
-<div class="overlay" id="overlay">
-  <h1 class="title-gradient">Fruit Crush</h1>
-  <p>Drag fruits to swap them and match 3 or more. Bigger matches create powerful specials!</p>
-  <button class="btn" id="start-btn">Play</button>
+<!-- ===== TIMED MODE SCREEN ===== -->
+<div class="screen" id="timed-screen">
+  <button class="back-btn" id="timed-back-btn" title="Back to map">&#x2190;</button>
+  <div class="level-label">TIMED MODE</div>
+  <div class="timed-hud">
+    <div class="hud-item"><span class="hud-label">Time</span><span class="hud-value timed-timer" id="timed-timer">60</span></div>
+    <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="timed-score" style="color:#ffcc00;">0</span></div>
+    <div class="hud-item"><span class="hud-label">Best</span><span class="hud-value" id="timed-best" style="color:#44e5a0;">0</span></div>
+  </div>
+  <div class="board-frame">
+    <div id="timed-board"></div>
+  </div>
 </div>
+
+<!-- ===== LEADERBOARD SCREEN ===== -->
+<div class="screen" id="leaderboard-screen">
+  <button class="shop-back-btn" id="lb-back-btn">&#x2190;</button>
+  <div class="lb-title">🏆 Personal Bests</div>
+  <p style="color:rgba(255,255,255,0.35); font-size:12px;">Your best score per level</p>
+  <div class="lb-list" id="lb-list"></div>
+  <p style="color:rgba(255,255,255,0.25); font-size:11px; margin-top:8px;" id="lb-timed-best"></p>
+</div>
+
+<!-- ===== ACHIEVEMENTS SCREEN ===== -->
+<div class="screen" id="achieve-screen">
+  <button class="shop-back-btn" id="achieve-back-btn">&#x2190;</button>
+  <div class="achieve-title">🎖️ Achievements</div>
+  <div class="achieve-grid" id="achieve-grid"></div>
+</div>
+
+<!-- ===== OVERLAY ===== -->
+<div class="overlay" id="overlay"></div>
 
 <script>
-const COLS = 8, ROWS = 9, CELL = 54, COLORS = 6, PAD = 3;
+// ===== CONSTANTS =====
+const COLS = 8, ROWS = 9, PAD = 3;
+let CELL = 52;
+const COLORS = 6;
+const EXTRA_COLORS = [6, 7]; // unlocked at higher levels
 const boardEl = document.getElementById('board');
 const overlayEl = document.getElementById('overlay');
 
-boardEl.style.width = COLS * CELL + PAD * 2 + 'px';
-boardEl.style.height = ROWS * CELL + PAD * 2 + 'px';
+// ===== FRUIT SVGs =====
+function fruitSVG(i) {
+  const fruits = [
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><linearGradient id="f0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff6b8a"/><stop offset="100%" stop-color="#e5254a"/></linearGradient></defs><path d="M18 4c-2 0-4 1-5 2 1-3 4-4 5-4s4 1 5 4c-1-1-3-2-5-2z" fill="#4ab648"/><ellipse cx="18" cy="22" rx="12" ry="13" fill="url(#f0)"/><circle cx="14" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="22" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="18" cy="23" r="1" fill="#fff" opacity="0.5"/></svg>`,
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f1" cx="40%" cy="35%"><stop offset="0%" stop-color="#ffc040"/><stop offset="100%" stop-color="#ff8c00"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#f1)"/><ellipse cx="18" cy="8" rx="3" ry="2" fill="#4ab648"/><circle cx="13" cy="16" r="5" fill="rgba(255,255,255,0.12)"/></svg>`,
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f2" cx="40%" cy="30%"><stop offset="0%" stop-color="#c88aff"/><stop offset="100%" stop-color="#7b2fbe"/></radialGradient></defs><circle cx="13" cy="16" r="5.5" fill="url(#f2)"/><circle cx="23" cy="16" r="5.5" fill="url(#f2)"/><circle cx="18" cy="15" r="5.5" fill="url(#f2)"/><circle cx="10" cy="24" r="5.5" fill="url(#f2)"/><circle cx="18" cy="23" r="5.5" fill="url(#f2)"/><circle cx="26" cy="24" r="5.5" fill="url(#f2)"/><circle cx="14" cy="30" r="5.5" fill="url(#f2)"/><circle cx="22" cy="30" r="5.5" fill="url(#f2)"/><rect x="17" y="3" width="2" height="8" rx="1" fill="#4ab648"/></svg>`,
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f3" cx="38%" cy="32%"><stop offset="0%" stop-color="#6ec6ff"/><stop offset="100%" stop-color="#1a6bcc"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#f3)"/><path d="M14 9 L18 7 L22 9" stroke="#2a4a8a" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="13" cy="15" r="4" fill="rgba(255,255,255,0.18)"/></svg>`,
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f4" cx="38%" cy="30%"><stop offset="0%" stop-color="#8aee6c"/><stop offset="100%" stop-color="#34a835"/></radialGradient></defs><path d="M18 8c-8 0-14 7-13 16 1 6 5 9 8 9 2 0 3-1 5-1s3 1 5 1c3 0 7-3 8-9 1-9-5-16-13-16z" fill="url(#f4)"/><path d="M18 4c0 0 2-3 5-3" stroke="#6b3a1f" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="20" cy="3" rx="3" ry="2" fill="#4ab648" transform="rotate(-20 20 3)"/></svg>`,
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f5" cx="40%" cy="35%"><stop offset="0%" stop-color="#fff176"/><stop offset="100%" stop-color="#ffc107"/></radialGradient></defs><ellipse cx="18" cy="19" rx="13" ry="11" fill="url(#f5)" transform="rotate(-15 18 19)"/><ellipse cx="14" cy="15" rx="4" ry="3" fill="rgba(255,255,255,0.2)" transform="rotate(-15 14 15)"/><circle cx="19" cy="10" r="2" fill="#4ab648"/></svg>`,
+    // 6: Watermelon (extra)
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><linearGradient id="f6r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff4d6a"/><stop offset="100%" stop-color="#cc1640"/></linearGradient><linearGradient id="f6g" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#1b7a3d"/><stop offset="40%" stop-color="#2ea84e"/><stop offset="100%" stop-color="#5cc77a"/></linearGradient></defs><path d="M4 22 Q4 6 18 4 Q32 6 32 22 Z" fill="url(#f6g)"/><path d="M6 22 Q6 9 18 7 Q30 9 30 22 Z" fill="url(#f6r)"/><path d="M18 9 L18 22" stroke="rgba(0,0,0,0.12)" stroke-width="1"/><path d="M12 10 Q14 16 13 22" stroke="rgba(0,0,0,0.1)" stroke-width="0.8" fill="none"/><path d="M24 10 Q22 16 23 22" stroke="rgba(0,0,0,0.1)" stroke-width="0.8" fill="none"/><ellipse cx="14" cy="15" rx="1.2" ry="1.8" fill="#1a1a1a" transform="rotate(-10 14 15)"/><ellipse cx="20" cy="13" rx="1.2" ry="1.8" fill="#1a1a1a" transform="rotate(8 20 13)"/><ellipse cx="17" cy="18" rx="1" ry="1.5" fill="#1a1a1a" transform="rotate(-5 17 18)"/><ellipse cx="22" cy="18" rx="1" ry="1.4" fill="#1a1a1a" transform="rotate(12 22 18)"/><ellipse cx="12" cy="19" rx="0.9" ry="1.3" fill="#1a1a1a"/><path d="M4 22 L32 22" stroke="#1b7a3d" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="11" r="4" fill="rgba(255,255,255,0.12)"/></svg>`,
+    // 7: Cherry (extra)
+    `<svg viewBox="0 0 36 36" width="100%" height="100%"><defs><radialGradient id="f7" cx="35%" cy="30%"><stop offset="0%" stop-color="#ff6080"/><stop offset="100%" stop-color="#c0143c"/></radialGradient></defs><path d="M18 6 Q14 2 12 8" stroke="#3a7d2a" stroke-width="2" fill="none"/><path d="M18 6 Q22 2 24 8" stroke="#3a7d2a" stroke-width="2" fill="none"/><circle cx="12" cy="22" r="9" fill="url(#f7)"/><circle cx="25" cy="20" r="8" fill="url(#f7)"/><circle cx="9" cy="18" r="3" fill="rgba(255,255,255,0.2)"/><circle cx="22" cy="16" r="2.5" fill="rgba(255,255,255,0.2)"/></svg>`,
+  ];
+  return fruits[i] || fruits[0];
+}
 
-const FRUITS = [
-  '\u{1F353}', // strawberry
-  '\u{1F34A}', // orange/tangerine
-  '\u{1F347}', // grapes
-  '\u{1F514}', // blueberry (bell as stand-in, we'll use a real one)
-  '\u{1F34E}', // red apple
-  '\u{1F34B}', // lemon
-];
+const PARTICLE_COLORS = ['#ff5c8a','#ff8c00','#9b59b6','#3498db','#27ae60','#f1c40f','#e74c3c','#c0143c'];
+const FRUIT_EMOJI = ['\u{1F353}','\u{1F34A}','\u{1F347}','\u{1FAD0}','\u{1F34F}','\u{1F34B}','\u{1F349}','\u{1F352}'];
 
-// Better fruit set with distinct digital fruits
-const FRUIT_SVG = [
-  // 0: Strawberry (red)
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><linearGradient id="s0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff6b8a"/><stop offset="100%" stop-color="#e5254a"/></linearGradient></defs><path d="M18 4c-2 0-4 1-5 2 1-3 4-4 5-4s4 1 5 4c-1-1-3-2-5-2z" fill="#4ab648"/><ellipse cx="18" cy="22" rx="12" ry="13" fill="url(#s0)"/><circle cx="14" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="22" cy="18" r="1" fill="#fff" opacity="0.5"/><circle cx="18" cy="23" r="1" fill="#fff" opacity="0.5"/><circle cx="14" cy="26" r="1" fill="#fff" opacity="0.5"/><circle cx="22" cy="26" r="1" fill="#fff" opacity="0.5"/></svg>`,
-  // 1: Orange
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s1" cx="40%" cy="35%"><stop offset="0%" stop-color="#ffc040"/><stop offset="100%" stop-color="#ff8c00"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#s1)"/><ellipse cx="18" cy="8" rx="3" ry="2" fill="#4ab648"/><circle cx="13" cy="16" r="5" fill="rgba(255,255,255,0.12)"/></svg>`,
-  // 2: Grapes (purple)
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s2" cx="40%" cy="30%"><stop offset="0%" stop-color="#c88aff"/><stop offset="100%" stop-color="#7b2fbe"/></radialGradient></defs><circle cx="13" cy="16" r="5.5" fill="url(#s2)"/><circle cx="23" cy="16" r="5.5" fill="url(#s2)"/><circle cx="18" cy="15" r="5.5" fill="url(#s2)"/><circle cx="10" cy="24" r="5.5" fill="url(#s2)"/><circle cx="18" cy="23" r="5.5" fill="url(#s2)"/><circle cx="26" cy="24" r="5.5" fill="url(#s2)"/><circle cx="14" cy="30" r="5.5" fill="url(#s2)"/><circle cx="22" cy="30" r="5.5" fill="url(#s2)"/><rect x="17" y="3" width="2" height="8" rx="1" fill="#4ab648"/><circle cx="12" cy="14" r="2" fill="rgba(255,255,255,0.25)"/></svg>`,
-  // 3: Blueberry (blue)
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s3" cx="38%" cy="32%"><stop offset="0%" stop-color="#6ec6ff"/><stop offset="100%" stop-color="#1a6bcc"/></radialGradient></defs><circle cx="18" cy="20" r="13" fill="url(#s3)"/><path d="M14 9 L18 7 L22 9" stroke="#2a4a8a" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="13" cy="15" r="4" fill="rgba(255,255,255,0.18)"/></svg>`,
-  // 4: Apple (green)
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s4" cx="38%" cy="30%"><stop offset="0%" stop-color="#8aee6c"/><stop offset="100%" stop-color="#34a835"/></radialGradient></defs><path d="M18 8c-8 0-14 7-13 16 1 6 5 9 8 9 2 0 3-1 5-1s3 1 5 1c3 0 7-3 8-9 1-9-5-16-13-16z" fill="url(#s4)"/><path d="M18 4c0 0 2-3 5-3" stroke="#6b3a1f" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="20" cy="3" rx="3" ry="2" fill="#4ab648" transform="rotate(-20 20 3)"/><circle cx="13" cy="15" r="4" fill="rgba(255,255,255,0.15)"/></svg>`,
-  // 5: Lemon (yellow)
-  `<svg viewBox="0 0 36 36" width="36" height="36"><defs><radialGradient id="s5" cx="40%" cy="35%"><stop offset="0%" stop-color="#fff176"/><stop offset="100%" stop-color="#ffc107"/></radialGradient></defs><ellipse cx="18" cy="19" rx="13" ry="11" fill="url(#s5)" transform="rotate(-15 18 19)"/><ellipse cx="14" cy="15" rx="4" ry="3" fill="rgba(255,255,255,0.2)" transform="rotate(-15 14 15)"/><circle cx="19" cy="10" r="2" fill="#4ab648"/></svg>`,
-];
+// ===== SOUND ENGINE =====
+let audioCtx = null;
+let soundEnabled = true;
 
-let grid, jelly, moves, score, level, selected, busy, levelData;
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playTone(freq, dur, type = 'sine', vol = 0.12) {
+  if (!soundEnabled || !audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+function sfxSwap() { playTone(500, 0.1, 'sine', 0.08); }
+function sfxMatch(cascade) {
+  const base = 440 + cascade * 80;
+  playTone(base, 0.15, 'sine', 0.1);
+  setTimeout(() => playTone(base * 1.25, 0.12, 'sine', 0.08), 50);
+}
+function sfxSpecial() {
+  playTone(600, 0.2, 'triangle', 0.12);
+  setTimeout(() => playTone(900, 0.15, 'triangle', 0.1), 80);
+  setTimeout(() => playTone(1200, 0.1, 'triangle', 0.08), 160);
+}
+function sfxBigCombo() {
+  for (let i = 0; i < 5; i++)
+    setTimeout(() => playTone(300 + i * 150, 0.2, 'sawtooth', 0.06), i * 60);
+}
+function sfxFail() { playTone(200, 0.3, 'square', 0.06); setTimeout(() => playTone(150, 0.3, 'square', 0.05), 150); }
+function sfxWin() {
+  [523,659,784,1047].forEach((f,i) => setTimeout(() => playTone(f, 0.3, 'sine', 0.1), i * 120));
+}
+function sfxClick() { playTone(800, 0.05, 'sine', 0.06); }
+function sfxDrop() { playTone(180, 0.15, 'sine', 0.05); }
+function sfxBooster() { playTone(700, 0.1, 'triangle', 0.1); setTimeout(() => playTone(1000, 0.15, 'triangle', 0.08), 80); }
+
+// ===== STATE =====
+let grid, jelly, chocolate, countdownBombs, moves, score, level, selected, busy, levelData;
 let cascadeCount = 0;
 let dragState = null;
-let pieceElements = new Map();
+let _idCounter = 0;
+let maxLevel = parseInt(localStorage.getItem('fc_maxLevel') || '1');
+let levelStars = JSON.parse(localStorage.getItem('fc_stars') || '{}');
+let boosters = JSON.parse(localStorage.getItem('fc_boosters') || '{"hammer":3,"shuffle":2,"moves":1,"hint":3}');
+if (boosters.hint === undefined) boosters.hint = 3;
+let activeBooster = null;
+let colorCount = COLORS;
 
+function genId() { return ++_idCounter; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ===== LEVEL DEFINITIONS =====
 const LEVELS = [
   { moves: 25, type: 'score', target: 1500 },
-  { moves: 22, type: 'score', target: 2500 },
-  { moves: 20, type: 'jelly', target: 0 },
-  { moves: 28, type: 'score', target: 3500 },
-  { moves: 20, type: 'jelly', target: 0 },
-  { moves: 18, type: 'score', target: 3000 },
-  { moves: 22, type: 'jelly', target: 0 },
+  { moves: 22, type: 'collect', collect: {0: 15, 1: 15} },
+  { moves: 20, type: 'jelly' },
+  { moves: 28, type: 'score', target: 3000 },
+  { moves: 22, type: 'collect', collect: {2: 20, 3: 20} },
+  { moves: 20, type: 'jelly' },
+  { moves: 18, type: 'score', target: 3500 },
+  { moves: 25, type: 'chocolate' },
+  { moves: 20, type: 'jelly' },
+  { moves: 22, type: 'collect', collect: {0: 25, 4: 25} },
+  { moves: 18, type: 'score', target: 4000 },
+  { moves: 20, type: 'chocolate' },
+  { moves: 16, type: 'jelly', bombs: 2 },
   { moves: 25, type: 'score', target: 5000 },
-  { moves: 20, type: 'jelly', target: 0 },
-  { moves: 15, type: 'score', target: 4000 },
+  { moves: 20, type: 'collect', collect: {1: 30, 5: 30} },
+  { moves: 18, type: 'chocolate', bombs: 2 },
+  { moves: 22, type: 'jelly' },
+  { moves: 20, type: 'score', target: 5500 },
+  { moves: 16, type: 'collect', collect: {0: 20, 2: 20, 4: 20} },
+  { moves: 18, type: 'chocolate', bombs: 3 },
+  // --- Levels 21-40: Medium difficulty ---
+  { moves: 22, type: 'score', target: 5000 },
+  { moves: 20, type: 'collect', collect: {0: 25, 3: 25}, bombs: 1 },
+  { moves: 18, type: 'jelly', bombs: 2 },
+  { moves: 20, type: 'chocolate', bombs: 2 },
+  { moves: 22, type: 'score', target: 5500, bombs: 1 },
+  { moves: 18, type: 'collect', collect: {1: 30, 4: 30} },
+  { moves: 16, type: 'jelly', bombs: 2 },
+  { moves: 22, type: 'chocolate', bombs: 3 },
+  { moves: 20, type: 'score', target: 6000 },
+  { moves: 18, type: 'collect', collect: {2: 28, 5: 28}, bombs: 2 },
+  { moves: 16, type: 'jelly', bombs: 3 },
+  { moves: 20, type: 'chocolate', bombs: 2 },
+  { moves: 18, type: 'score', target: 6500, bombs: 2 },
+  { moves: 16, type: 'collect', collect: {0: 30, 1: 30, 2: 15} },
+  { moves: 18, type: 'jelly', bombs: 2 },
+  { moves: 16, type: 'chocolate', bombs: 3 },
+  { moves: 20, type: 'score', target: 7000 },
+  { moves: 16, type: 'collect', collect: {3: 35, 5: 35}, bombs: 2 },
+  { moves: 14, type: 'jelly', bombs: 3 },
+  { moves: 18, type: 'chocolate', bombs: 4 },
+  // --- Levels 41-60: Hard ---
+  { moves: 18, type: 'score', target: 7500, bombs: 2 },
+  { moves: 16, type: 'collect', collect: {0: 30, 2: 30, 4: 20}, bombs: 2 },
+  { moves: 14, type: 'jelly', bombs: 3 },
+  { moves: 18, type: 'chocolate', bombs: 4 },
+  { moves: 16, type: 'score', target: 8000, bombs: 3 },
+  { moves: 14, type: 'collect', collect: {1: 35, 3: 35}, bombs: 3 },
+  { moves: 14, type: 'jelly', bombs: 4 },
+  { moves: 16, type: 'chocolate', bombs: 4 },
+  { moves: 16, type: 'score', target: 8500, bombs: 2 },
+  { moves: 14, type: 'collect', collect: {0: 25, 2: 25, 5: 25}, bombs: 3 },
+  { moves: 12, type: 'jelly', bombs: 3 },
+  { moves: 16, type: 'chocolate', bombs: 5 },
+  { moves: 14, type: 'score', target: 9000, bombs: 3 },
+  { moves: 14, type: 'collect', collect: {1: 30, 4: 30, 5: 20}, bombs: 3 },
+  { moves: 12, type: 'jelly', bombs: 4 },
+  { moves: 14, type: 'chocolate', bombs: 4 },
+  { moves: 14, type: 'score', target: 9500, bombs: 3 },
+  { moves: 12, type: 'collect', collect: {0: 35, 3: 35, 5: 25}, bombs: 3 },
+  { moves: 12, type: 'jelly', bombs: 4 },
+  { moves: 14, type: 'chocolate', bombs: 5 },
+  // --- Levels 61-80: Very Hard ---
+  { moves: 14, type: 'score', target: 10000, bombs: 3 },
+  { moves: 12, type: 'collect', collect: {0: 35, 1: 35, 2: 25}, bombs: 3 },
+  { moves: 12, type: 'jelly', bombs: 4 },
+  { moves: 14, type: 'chocolate', bombs: 5 },
+  { moves: 12, type: 'score', target: 10500, bombs: 4 },
+  { moves: 12, type: 'collect', collect: {2: 40, 4: 40}, bombs: 4 },
+  { moves: 10, type: 'jelly', bombs: 4 },
+  { moves: 12, type: 'chocolate', bombs: 5 },
+  { moves: 12, type: 'score', target: 11000, bombs: 3 },
+  { moves: 10, type: 'collect', collect: {1: 30, 3: 30, 5: 30}, bombs: 4 },
+  { moves: 10, type: 'jelly', bombs: 5 },
+  { moves: 12, type: 'chocolate', bombs: 6 },
+  { moves: 10, type: 'score', target: 11500, bombs: 4 },
+  { moves: 10, type: 'collect', collect: {0: 35, 2: 35, 4: 25}, bombs: 4 },
+  { moves: 10, type: 'jelly', bombs: 5 },
+  { moves: 10, type: 'chocolate', bombs: 5 },
+  { moves: 10, type: 'score', target: 12000, bombs: 4 },
+  { moves: 10, type: 'collect', collect: {1: 40, 3: 40, 5: 30}, bombs: 4 },
+  { moves: 10, type: 'jelly', bombs: 5 },
+  { moves: 10, type: 'chocolate', bombs: 6 },
+  // --- Levels 81-100: Brutal ---
+  { moves: 10, type: 'score', target: 12500, bombs: 5 },
+  { moves: 10, type: 'collect', collect: {0: 40, 2: 40, 4: 30}, bombs: 5 },
+  { moves: 8, type: 'jelly', bombs: 5 },
+  { moves: 10, type: 'chocolate', bombs: 6 },
+  { moves: 8, type: 'score', target: 13000, bombs: 5 },
+  { moves: 8, type: 'collect', collect: {1: 40, 3: 40, 5: 35}, bombs: 5 },
+  { moves: 8, type: 'jelly', bombs: 6 },
+  { moves: 8, type: 'chocolate', bombs: 6 },
+  { moves: 8, type: 'score', target: 14000, bombs: 5 },
+  { moves: 8, type: 'collect', collect: {0: 45, 1: 45, 2: 30}, bombs: 5 },
+  { moves: 8, type: 'jelly', bombs: 6 },
+  { moves: 8, type: 'chocolate', bombs: 7 },
+  { moves: 8, type: 'score', target: 15000, bombs: 6 },
+  { moves: 8, type: 'collect', collect: {2: 45, 4: 45, 5: 35}, bombs: 6 },
+  { moves: 6, type: 'jelly', bombs: 6 },
+  { moves: 8, type: 'chocolate', bombs: 7 },
+  { moves: 6, type: 'score', target: 16000, bombs: 6 },
+  { moves: 6, type: 'collect', collect: {0: 50, 3: 50, 5: 40}, bombs: 6 },
+  { moves: 6, type: 'jelly', bombs: 7 },
+  { moves: 6, type: 'chocolate', bombs: 8 },
 ];
 
 function getLevel(n) {
-  if (n <= LEVELS.length) return { ...LEVELS[n - 1] };
-  return {
-    moves: Math.max(12, 25 - Math.floor(n / 3)),
-    type: n % 2 === 0 ? 'jelly' : 'score',
-    target: n % 2 === 0 ? 0 : 2000 + n * 400
-  };
+  if (n <= LEVELS.length) return JSON.parse(JSON.stringify(LEVELS[n - 1]));
+  const cycle = (n - 1) % 4;
+  const diff = Math.floor(n / 5);
+  const types = ['score','collect','jelly','chocolate'];
+  const base = { moves: Math.max(12, 22 - diff), type: types[cycle] };
+  if (base.type === 'score') base.target = 3000 + n * 300;
+  if (base.type === 'collect') {
+    const a = n % colorCount, b = (n + 2) % colorCount;
+    base.collect = { [a]: 20 + diff * 3, [b]: 20 + diff * 3 };
+  }
+  if (n > 12 && Math.random() < 0.4) base.bombs = 1 + Math.floor(diff / 2);
+  return base;
 }
 
+// ===== CELL SIZE =====
+function updateCellSize() {
+  const maxW = window.innerWidth - 40;
+  const maxH = window.innerHeight - 220;
+  CELL = Math.min(52, Math.floor(maxW / COLS), Math.floor(maxH / ROWS));
+  CELL = Math.max(30, CELL);
+  document.documentElement.style.setProperty('--cell', CELL + 'px');
+  boardEl.style.width = COLS * CELL + PAD * 2 + 'px';
+  boardEl.style.height = ROWS * CELL + PAD * 2 + 'px';
+}
+
+// ===== ANIMATED BACKGROUND =====
+function initBG() {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h;
+  const stars = [];
+  const orbs = [];
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  for (let i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * 2000, y: Math.random() * 2000,
+      r: 0.3 + Math.random() * 1.5,
+      a: 0.3 + Math.random() * 0.7,
+      speed: 0.1 + Math.random() * 0.3,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+
+  for (let i = 0; i < 5; i++) {
+    orbs.push({
+      x: Math.random() * 2000, y: Math.random() * 2000,
+      r: 80 + Math.random() * 180,
+      color: ['rgba(255,92,138,','rgba(100,60,255,','rgba(50,200,150,','rgba(255,180,40,','rgba(60,140,255,'][i],
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.3
+    });
+  }
+
+  function draw(t) {
+    ctx.fillStyle = '#080b1a';
+    ctx.fillRect(0, 0, w, h);
+
+    orbs.forEach(o => {
+      o.x += o.vx;
+      o.y += o.vy;
+      if (o.x < -o.r) o.x = w + o.r;
+      if (o.x > w + o.r) o.x = -o.r;
+      if (o.y < -o.r) o.y = h + o.r;
+      if (o.y > h + o.r) o.y = -o.r;
+      const grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+      grad.addColorStop(0, o.color + '0.12)');
+      grad.addColorStop(1, o.color + '0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(o.x - o.r, o.y - o.r, o.r * 2, o.r * 2);
+    });
+
+    stars.forEach(s => {
+      const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
+      ctx.globalAlpha = s.a * twinkle;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(s.x % w, s.y % h, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+}
+initBG();
+
+// ===== MAP =====
+function renderMap() {
+  const road = document.getElementById('map-road');
+  road.innerHTML = '';
+  const total = Math.max(maxLevel + 5, 100);
+  const roadWidth = 320;
+  const positions = [];
+
+  function seededRand(seed) {
+    let s = seed;
+    return function() { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  }
+  const rng = seededRand(42);
+
+  let curX = roadWidth / 2 - 28;
+  let curY = 20;
+  let direction = 1;
+
+  for (let i = 0; i < total; i++) {
+    const jitterX = (rng() - 0.5) * 40;
+    const jitterY = (rng() - 0.5) * 12;
+    const x = Math.max(10, Math.min(roadWidth - 66, curX + jitterX));
+    const y = curY + jitterY;
+    positions.push({ x, y });
+
+    curY += 55 + rng() * 30;
+    curX += direction * (30 + rng() * 50);
+
+    if (curX > roadWidth - 80) { direction = -1; curX = roadWidth - 80; }
+    if (curX < 20) { direction = 1; curX = 20; }
+
+    if (rng() < 0.25) direction *= -1;
+  }
+
+  road.style.height = (positions[positions.length - 1].y + 80) + 'px';
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'map-path-line');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.style.position = 'absolute';
+  svg.style.left = '0';
+  svg.style.top = '0';
+
+  let pathD = `M ${positions[0].x + 28} ${positions[0].y + 28}`;
+  for (let i = 1; i < positions.length; i++) {
+    const prev = positions[i - 1];
+    const curr = positions[i];
+    const gap = Math.abs(curr.y - prev.y);
+    const cpy1 = prev.y + 28 + gap * 0.3;
+    const cpy2 = curr.y + 28 - gap * 0.3;
+    pathD += ` C ${prev.x + 28} ${cpy1}, ${curr.x + 28} ${cpy2}, ${curr.x + 28} ${curr.y + 28}`;
+  }
+
+  const completedIdx = maxLevel - 1;
+  if (completedIdx > 0) {
+    const pathGlow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathGlow.setAttribute('d', pathD);
+    pathGlow.setAttribute('fill', 'none');
+    pathGlow.setAttribute('stroke', 'rgba(68,229,160,0.15)');
+    pathGlow.setAttribute('stroke-width', '12');
+    pathGlow.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(pathGlow);
+  }
+
+  const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  pathEl.setAttribute('d', pathD);
+  pathEl.setAttribute('fill', 'none');
+  pathEl.setAttribute('stroke', 'rgba(255,255,255,0.06)');
+  pathEl.setAttribute('stroke-width', '4');
+  pathEl.setAttribute('stroke-linecap', 'round');
+  pathEl.setAttribute('stroke-dasharray', '8 6');
+  svg.appendChild(pathEl);
+
+  road.appendChild(svg);
+
+  const levelIcons = [
+    '🍎','🌟','🔥','💎','🌈','⚡','🎯','🍀','💫','🎪',
+    '🦋','🌺','🎨','🐝','🌙','❄️','🎸','🦊','🌊','🎭',
+    '🍉','🦁','🎹','🐬','☀️','🎲','🦄','🍒','🌸','⭐',
+    '🎵','🐠','🔮','🍇','🌴','💜','🦅','🎻','🐙','🌻',
+    '🍊','🎺','🦜','💚','🌵','🎃','🐋','🎼','🦚','🌷',
+    '🍋','🏔️','🦩','💙','🌾','🎡','🐉','🎧','🦈','🌹',
+    '🍓','⛰️','🦢','💛','🌿','🎠','🐅','🎤','🦑','🌼',
+    '🫐','🏝️','🦌','🧡','🍃','🎢','🐆','🥁','🦞','💐',
+    '🥝','🗻','🦉','❤️','🍂','🎳','🐘','🪗','🦀','🌕',
+    '🥭','🏜️','🦆','💗','🍁','🎰','🦍','🪘','🐢','🌑',
+  ];
+
+  for (let i = 0; i < total; i++) {
+    const num = i + 1;
+    const unlocked = num <= maxLevel;
+    const completed = num < maxLevel || (levelStars[num] && levelStars[num] > 0);
+    const node = document.createElement('div');
+    node.className = 'map-node' + (!unlocked ? ' locked' : '') + (num === maxLevel && !completed ? ' current' : '') + (completed ? ' completed' : '');
+    node.style.left = positions[i].x + 'px';
+    node.style.top = positions[i].y + 'px';
+
+    const ld = getLevel(num);
+
+    let starsHTML = '';
+    if (completed && levelStars[num]) {
+      starsHTML = '<div class="map-stars">' + '⭐'.repeat(levelStars[num]) + '</div>';
+    }
+
+    const icon = levelIcons[i % levelIcons.length];
+    node.innerHTML = `${num}<div class="map-icon">${icon}</div>${starsHTML}`;
+
+    if (unlocked) {
+      node.addEventListener('click', () => {
+        sfxClick();
+        level = num;
+        showScreen('game');
+        startLevel();
+      });
+    }
+    road.appendChild(node);
+  }
+
+  // scroll to current level
+  setTimeout(() => {
+    const currentNode = road.querySelector('.map-node.current');
+    if (currentNode) currentNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+}
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(name + '-screen').classList.add('active');
+}
+
+// ===== GRID INIT =====
 function wouldMatch(c, r, color) {
   if (c >= 2 && grid[r][c-1]?.color === color && grid[r][c-2]?.color === color) return true;
   if (r >= 2 && grid[r-1]?.[c]?.color === color && grid[r-2]?.[c]?.color === color) return true;
@@ -421,175 +1544,169 @@ function initGrid() {
     for (let c = 0; c < COLS; c++) {
       let cell;
       do {
-        cell = { color: Math.floor(Math.random() * COLORS), special: null, id: genId() };
+        cell = { color: Math.floor(Math.random() * colorCount), special: null, id: genId() };
       } while (wouldMatch(c, r, cell.color));
       grid[r][c] = cell;
     }
   }
 }
 
-let _idCounter = 0;
-function genId() { return ++_idCounter; }
-
 function initJelly() {
   jelly = Array.from({length: ROWS}, () => Array(COLS).fill(0));
   if (levelData.type === 'jelly') {
-    const count = Math.min(COLS * ROWS, 15 + level * 3);
+    const count = Math.min(COLS * ROWS - 8, 18 + level * 2);
     let placed = 0;
-    const centerR = Math.floor(ROWS / 2), centerC = Math.floor(COLS / 2);
-    for (let dist = 0; dist < Math.max(ROWS, COLS) && placed < count; dist++) {
-      for (let r = 0; r < ROWS && placed < count; r++) {
-        for (let c = 0; c < COLS && placed < count; c++) {
-          if (Math.abs(r - centerR) + Math.abs(c - centerC) === dist && jelly[r][c] === 0) {
-            jelly[r][c] = level >= 5 ? 2 : 1;
+    const centerR = Math.floor(ROWS/2), centerC = Math.floor(COLS/2);
+    for (let dist = 0; dist < Math.max(ROWS,COLS) && placed < count; dist++) {
+      for (let r = 0; r < ROWS && placed < count; r++)
+        for (let c = 0; c < COLS && placed < count; c++)
+          if (Math.abs(r-centerR) + Math.abs(c-centerC) === dist && jelly[r][c] === 0) {
+            jelly[r][c] = level >= 7 ? 2 : 1;
             placed++;
           }
-        }
-      }
     }
   }
+}
+
+function initChocolate() {
+  chocolate = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  if (levelData.type === 'chocolate') {
+    const count = 6 + Math.floor(level / 3);
+    let placed = 0;
+    for (let attempt = 0; attempt < 200 && placed < count; attempt++) {
+      const r = Math.floor(Math.random() * ROWS);
+      const c = Math.floor(Math.random() * COLS);
+      if (!chocolate[r][c]) { chocolate[r][c] = true; placed++; }
+    }
+  }
+}
+
+function initCountdownBombs() {
+  countdownBombs = Array.from({length: ROWS}, () => Array(COLS).fill(0));
 }
 
 function jellyRemaining() {
   let count = 0;
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      count += jelly[r][c];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) count += jelly[r][c];
   return count;
 }
 
-function renderBackground() {
-  const existing = boardEl.querySelectorAll('.cell-bg, .jelly');
-  existing.forEach(e => e.remove());
+function chocolateRemaining() {
+  let count = 0;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (chocolate[r][c]) count++;
+  return count;
+}
 
+// ===== RENDERING =====
+function renderBackground() {
+  boardEl.querySelectorAll('.cell-bg,.jelly,.chocolate-cell').forEach(e => e.remove());
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const bg = document.createElement('div');
-      bg.className = 'cell-bg ' + ((r + c) % 2 === 0 ? 'dark' : 'light');
-      bg.style.left = c * CELL + PAD + 'px';
-      bg.style.top = r * CELL + PAD + 'px';
-      bg.style.width = CELL + 'px';
-      bg.style.height = CELL + 'px';
+      bg.className = 'cell-bg ' + ((r+c)%2===0 ? 'dark' : 'light');
+      bg.style.cssText = `left:${c*CELL+PAD}px;top:${r*CELL+PAD}px;width:${CELL}px;height:${CELL}px;`;
       boardEl.appendChild(bg);
 
       if (jelly[r][c] > 0) {
-        const jEl = document.createElement('div');
-        jEl.className = 'jelly jelly-' + jelly[r][c];
-        jEl.style.left = c * CELL + PAD + 2 + 'px';
-        jEl.style.top = r * CELL + PAD + 2 + 'px';
-        jEl.style.width = CELL - 4 + 'px';
-        jEl.style.height = CELL - 4 + 'px';
-        jEl.id = 'jelly-' + r + '-' + c;
-        boardEl.appendChild(jEl);
+        const j = document.createElement('div');
+        j.className = 'jelly jelly-' + jelly[r][c];
+        j.style.cssText = `left:${c*CELL+PAD+2}px;top:${r*CELL+PAD+2}px;width:${CELL-4}px;height:${CELL-4}px;`;
+        boardEl.appendChild(j);
+      }
+
+      if (chocolate[r][c]) {
+        const ch = document.createElement('div');
+        ch.className = 'chocolate-cell';
+        ch.style.cssText = `left:${c*CELL+PAD+1}px;top:${r*CELL+PAD+1}px;width:${CELL-2}px;height:${CELL-2}px;`;
+        boardEl.appendChild(ch);
       }
     }
   }
 }
 
-function createPieceEl(cell) {
+function createPieceEl(cell, r, c) {
   const el = document.createElement('div');
   el.className = 'piece-el';
-  el.style.width = CELL + 'px';
-  el.style.height = CELL + 'px';
   el.dataset.id = cell.id;
-
   const fruit = document.createElement('div');
   fruit.className = 'fruit';
-
   if (cell.special === 'bomb') {
-    fruit.innerHTML = '\u{2B50}';
-    fruit.classList.add('bomb-fruit');
+    fruit.innerHTML = '⭐';
+    fruit.style.fontSize = (CELL * 0.7) + 'px';
+    fruit.style.filter = 'drop-shadow(0 0 10px rgba(255,255,255,0.6))';
   } else {
-    fruit.innerHTML = FRUIT_SVG[cell.color];
+    fruit.innerHTML = fruitSVG(cell.color);
   }
   el.appendChild(fruit);
-
-  if (cell.special && cell.special !== 'bomb') {
-    const badge = document.createElement('div');
-    badge.className = 'special-badge badge-' + cell.special;
-    el.appendChild(badge);
-  }
-  if (cell.special === 'bomb') {
-    const badge = document.createElement('div');
-    badge.className = 'special-badge badge-bomb';
-    el.appendChild(badge);
-  }
-
+  updateSpecialIndicator(el, cell);
+  updateBombCountdown(el, r, c);
   return el;
 }
+
+function updateSpecialIndicator(el, cell) {
+  el.querySelectorAll('.special-indicator').forEach(e => e.remove());
+  if (cell.special && cell.special !== 'bomb') {
+    const ind = document.createElement('div');
+    ind.className = 'special-indicator ind-' + cell.special;
+    el.appendChild(ind);
+  }
+  if (cell.special === 'bomb') {
+    const ind = document.createElement('div');
+    ind.className = 'special-indicator ind-bomb';
+    el.appendChild(ind);
+  }
+}
+
+function updateBombCountdown(el, r, c) {}
 
 function render(options = {}) {
   const { animate = null, spawned = null } = options;
   const oldEls = new Map();
-  boardEl.querySelectorAll('.piece-el').forEach(el => {
-    oldEls.set(el.dataset.id, el);
-  });
-
+  boardEl.querySelectorAll('.piece-el').forEach(el => oldEls.set(el.dataset.id, el));
   renderBackground();
-
   const usedIds = new Set();
+
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const cell = grid[r][c];
       if (!cell) continue;
+      if (chocolate[r][c]) continue;
       usedIds.add(String(cell.id));
-
       let el = oldEls.get(String(cell.id));
+
       if (el) {
         el.style.left = c * CELL + PAD + 'px';
-        if (animate === 'fall') {
-          el.classList.remove('swapping', 'clearing', 'spawning');
-          el.classList.add('falling');
-        } else if (animate === 'swap') {
-          el.classList.remove('falling', 'clearing', 'spawning');
-          el.classList.add('swapping');
-        } else {
-          el.classList.remove('falling', 'swapping', 'clearing', 'spawning');
-        }
+        el.classList.remove('swapping','clearing','spawning','falling');
+        if (animate === 'fall') el.classList.add('falling');
+        else if (animate === 'swap') el.classList.add('swapping');
         el.style.top = r * CELL + PAD + 'px';
 
         const oldFruit = el.querySelector('.fruit');
         if (cell.special === 'bomb') {
-          oldFruit.innerHTML = '\u{2B50}';
-          oldFruit.classList.add('bomb-fruit');
+          oldFruit.innerHTML = '⭐';
+          oldFruit.style.fontSize = (CELL * 0.7) + 'px';
+          oldFruit.style.filter = 'drop-shadow(0 0 10px rgba(255,255,255,0.6))';
         } else {
-          oldFruit.innerHTML = FRUIT_SVG[cell.color];
-          oldFruit.classList.remove('bomb-fruit');
+          oldFruit.innerHTML = fruitSVG(cell.color);
+          oldFruit.style.fontSize = '';
+          oldFruit.style.filter = '';
         }
-
-        el.querySelectorAll('.special-badge').forEach(b => b.remove());
-        if (cell.special && cell.special !== 'bomb') {
-          const badge = document.createElement('div');
-          badge.className = 'special-badge badge-' + cell.special;
-          el.appendChild(badge);
-        }
-        if (cell.special === 'bomb') {
-          const badge = document.createElement('div');
-          badge.className = 'special-badge badge-bomb';
-          el.appendChild(badge);
-        }
-
+        updateSpecialIndicator(el, cell);
+        updateBombCountdown(el, r, c);
         if (selected && selected.c === c && selected.r === r) el.classList.add('selected');
         else el.classList.remove('selected');
-
         boardEl.appendChild(el);
       } else {
-        el = createPieceEl(cell);
+        el = createPieceEl(cell, r, c);
         el.style.left = c * CELL + PAD + 'px';
         el.style.top = r * CELL + PAD + 'px';
-        if (spawned && spawned.has(cell.id)) {
-          el.classList.add('spawning');
-        }
+        if (spawned && spawned.has(cell.id)) el.classList.add('spawning');
         boardEl.appendChild(el);
       }
     }
   }
 
-  oldEls.forEach((el, id) => {
-    if (!usedIds.has(id) && el.parentNode) {
-      el.parentNode.removeChild(el);
-    }
-  });
+  oldEls.forEach((el, id) => { if (!usedIds.has(id) && el.parentNode) el.parentNode.removeChild(el); });
 }
 
 function renderClearing(indices) {
@@ -598,66 +1715,102 @@ function renderClearing(indices) {
     const cell = grid[r][c];
     if (!cell) return;
     const el = boardEl.querySelector(`[data-id="${cell.id}"]`);
-    if (el) {
-      el.classList.add('clearing');
-      spawnParticles(c, r, cell.color);
-    }
+    if (el) { el.classList.add('clearing'); spawnParticles(c, r, cell.color); }
   });
 }
 
 function spawnParticles(c, r, color) {
-  const colors = ['#ff5c8a','#ff8c00','#9b59b6','#3498db','#27ae60','#f1c40f'];
-  const cx = c * CELL + CELL/2 + PAD;
-  const cy = r * CELL + CELL/2 + PAD;
-  for (let i = 0; i < 6; i++) {
+  const cx = c * CELL + CELL/2 + PAD, cy = r * CELL + CELL/2 + PAD;
+  for (let i = 0; i < 8; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
-    const size = 4 + Math.random() * 4;
-    p.style.width = size + 'px';
-    p.style.height = size + 'px';
-    p.style.background = colors[color] || '#fff';
-    p.style.left = cx + 'px';
-    p.style.top = cy + 'px';
-    p.style.opacity = '1';
+    const sz = 3 + Math.random() * 5;
+    p.style.cssText = `width:${sz}px;height:${sz}px;background:${PARTICLE_COLORS[color]||'#fff'};left:${cx}px;top:${cy}px;`;
     boardEl.appendChild(p);
-
-    const angle = (Math.PI * 2 / 6) * i + Math.random() * 0.5;
-    const dist = 20 + Math.random() * 30;
-    const tx = Math.cos(angle) * dist;
-    const ty = Math.sin(angle) * dist;
-
+    const angle = (Math.PI*2/8)*i + Math.random()*0.5;
+    const dist = 15 + Math.random() * 35;
     p.animate([
       { transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { transform: `translate(${tx}px,${ty}px) scale(0)`, opacity: 0 }
-    ], { duration: 400 + Math.random() * 200, easing: 'ease-out', fill: 'forwards' })
-    .onfinish = () => p.remove();
+      { transform: `translate(${Math.cos(angle)*dist}px,${Math.sin(angle)*dist}px) scale(0)`, opacity: 0 }
+    ], { duration: 350 + Math.random()*200, easing: 'ease-out', fill: 'forwards' }).onfinish = () => p.remove();
   }
+}
+
+function screenShake() {
+  boardEl.classList.remove('board-shake');
+  void boardEl.offsetWidth;
+  boardEl.classList.add('board-shake');
+  setTimeout(() => boardEl.classList.remove('board-shake'), 400);
+}
+
+function showCascadeLabel(n) {
+  const colors = ['#ffcc00','#ff8c00','#ff5c8a','#ff3366','#ff0044'];
+  const labels = ['Nice!','Great!','Amazing!','Incredible!','GODLIKE!'];
+  const el = document.createElement('div');
+  el.className = 'cascade-label';
+  el.textContent = labels[Math.min(n-1, labels.length-1)];
+  el.style.color = colors[Math.min(n-1, colors.length-1)];
+  boardEl.appendChild(el);
+  setTimeout(() => el.remove(), 800);
 }
 
 function updateHUD() {
   document.getElementById('moves-val').textContent = moves;
   document.getElementById('score-val').textContent = score;
   document.getElementById('level-num').textContent = level;
+  document.getElementById('hammer-count').textContent = boosters.hammer;
+  document.getElementById('shuffle-count').textContent = boosters.shuffle;
+  document.getElementById('moves-plus-count').textContent = boosters.moves;
+
+  const collectDisplay = document.getElementById('collect-display');
 
   if (levelData.type === 'jelly') {
     const rem = jellyRemaining();
     document.getElementById('target-val').textContent = rem;
     document.getElementById('obj-info').textContent = rem > 0 ? `Clear all jelly • ${rem} left` : 'Jelly cleared!';
+    collectDisplay.style.display = 'none';
+  } else if (levelData.type === 'chocolate') {
+    const rem = chocolateRemaining();
+    document.getElementById('target-val').textContent = rem;
+    document.getElementById('obj-info').textContent = rem > 0 ? `Clear all chocolate • ${rem} left` : 'Chocolate cleared!';
+    collectDisplay.style.display = 'none';
+  } else if (levelData.type === 'collect') {
+    document.getElementById('target-val').textContent = '';
+    document.getElementById('obj-info').textContent = 'Collect the fruits!';
+    collectDisplay.style.display = 'flex';
+    collectDisplay.innerHTML = '';
+    for (const [colorIdx, needed] of Object.entries(levelData.collect)) {
+      const rem = Math.max(0, needed - (levelData._collected[colorIdx] || 0));
+      const item = document.createElement('div');
+      item.className = 'collect-item';
+      item.innerHTML = `<span class="collect-icon">${FRUIT_EMOJI[colorIdx]}</span><span>${rem}</span>`;
+      if (rem === 0) item.style.opacity = '0.3';
+      collectDisplay.appendChild(item);
+    }
   } else {
     document.getElementById('target-val').textContent = levelData.target;
     document.getElementById('obj-info').textContent = score >= levelData.target ? 'Target reached!' : `Reach ${levelData.target} points`;
+    collectDisplay.style.display = 'none';
   }
 }
 
-// ---- DRAG HANDLING ----
+function showFloatingText(c, r, pts) {
+  const el = document.createElement('div');
+  el.className = 'combo-text';
+  el.textContent = '+' + pts;
+  el.style.cssText = `left:${c*CELL+CELL/2-20+PAD}px;top:${r*CELL+PAD}px;`;
+  boardEl.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
 
+// ===== DRAG =====
 function setupDrag() {
-  boardEl.addEventListener('mousedown', onPointerDown);
-  boardEl.addEventListener('touchstart', onTouchStart, { passive: false });
-  document.addEventListener('mousemove', onPointerMove);
-  document.addEventListener('touchmove', onTouchMove, { passive: false });
-  document.addEventListener('mouseup', onPointerUp);
-  document.addEventListener('touchend', onTouchEnd);
+  boardEl.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+  boardEl.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+  document.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+  document.addEventListener('touchmove', e => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+  document.addEventListener('mouseup', endDrag);
+  document.addEventListener('touchend', endDrag);
 }
 
 function getCellFromPos(x, y) {
@@ -668,24 +1821,18 @@ function getCellFromPos(x, y) {
   return { c, r };
 }
 
-function onTouchStart(e) {
-  e.preventDefault();
-  const t = e.touches[0];
-  startDrag(t.clientX, t.clientY);
-}
-
-function onPointerDown(e) {
-  startDrag(e.clientX, e.clientY);
-}
-
 function startDrag(x, y) {
   if (busy) return;
   const pos = getCellFromPos(x, y);
-  if (!pos || !grid[pos.r][pos.c]) return;
+  if (!pos || !grid[pos.r][pos.c] || chocolate[pos.r][pos.c]) return;
+
+  if (activeBooster === 'hammer') {
+    useHammer(pos.c, pos.r);
+    return;
+  }
 
   if (selected) {
-    const dc = Math.abs(selected.c - pos.c);
-    const dr = Math.abs(selected.r - pos.r);
+    const dc = Math.abs(selected.c - pos.c), dr = Math.abs(selected.r - pos.r);
     if (dc + dr === 1) {
       const s = { ...selected };
       selected = null;
@@ -695,47 +1842,23 @@ function startDrag(x, y) {
     }
   }
 
-  dragState = {
-    startX: x, startY: y,
-    c: pos.c, r: pos.r,
-    moved: false
-  };
-
+  dragState = { startX: x, startY: y, c: pos.c, r: pos.r, moved: false };
   selected = { c: pos.c, r: pos.r };
+  sfxClick();
   render();
-
   const el = boardEl.querySelector(`[data-id="${grid[pos.r][pos.c].id}"]`);
   if (el) el.classList.add('dragging');
 }
 
-function onTouchMove(e) {
-  e.preventDefault();
-  const t = e.touches[0];
-  moveDrag(t.clientX, t.clientY);
-}
-
-function onPointerMove(e) {
-  moveDrag(e.clientX, e.clientY);
-}
-
 function moveDrag(x, y) {
   if (!dragState || busy) return;
-  const dx = x - dragState.startX;
-  const dy = y - dragState.startY;
-  const threshold = CELL * 0.35;
-
-  if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+  const dx = x - dragState.startX, dy = y - dragState.startY;
+  if (Math.abs(dx) > CELL * 0.3 || Math.abs(dy) > CELL * 0.3) {
     dragState.moved = true;
     let tc, tr;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      tc = dragState.c + (dx > 0 ? 1 : -1);
-      tr = dragState.r;
-    } else {
-      tc = dragState.c;
-      tr = dragState.r + (dy > 0 ? 1 : -1);
-    }
-
-    if (tc >= 0 && tc < COLS && tr >= 0 && tr < ROWS) {
+    if (Math.abs(dx) > Math.abs(dy)) { tc = dragState.c + (dx > 0 ? 1 : -1); tr = dragState.r; }
+    else { tc = dragState.c; tr = dragState.r + (dy > 0 ? 1 : -1); }
+    if (tc >= 0 && tc < COLS && tr >= 0 && tr < ROWS && !chocolate[tr][tc]) {
       const el = boardEl.querySelector(`[data-id="${grid[dragState.r][dragState.c]?.id}"]`);
       if (el) el.classList.remove('dragging');
       selected = null;
@@ -746,30 +1869,23 @@ function moveDrag(x, y) {
   }
 }
 
-function onTouchEnd(e) { endDrag(); }
-function onPointerUp(e) { endDrag(); }
-
 function endDrag() {
   if (!dragState) return;
   const el = boardEl.querySelector(`[data-id="${grid[dragState.r]?.[dragState.c]?.id}"]`);
   if (el) el.classList.remove('dragging');
-
-  if (!dragState.moved) {
-    // just a tap/click - keep selected state
-  }
   dragState = null;
 }
 
-// ---- GAME LOGIC ----
-
+// ===== GAME LOGIC =====
 function swap(c1, r1, c2, r2) {
-  const temp = grid[r1][c1];
-  grid[r1][c1] = grid[r2][c2];
-  grid[r2][c2] = temp;
+  [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+  // also swap countdown bombs
+  [countdownBombs[r1][c1], countdownBombs[r2][c2]] = [countdownBombs[r2][c2], countdownBombs[r1][c1]];
 }
 
 async function trySwap(c1, r1, c2, r2) {
   busy = true;
+  sfxSwap();
   swap(c1, r1, c2, r2);
   render({ animate: 'swap' });
   await sleep(220);
@@ -780,6 +1896,9 @@ async function trySwap(c1, r1, c2, r2) {
     moves--;
     cascadeCount = 0;
     await resolveBoardLoop();
+    tickCountdownBombs();
+    spreadChocolate();
+    render();
     updateHUD();
     checkWinLose();
   } else {
@@ -788,9 +1907,13 @@ async function trySwap(c1, r1, c2, r2) {
       moves--;
       cascadeCount = 0;
       await resolveBoardLoop();
+      tickCountdownBombs();
+      spreadChocolate();
+      render();
       updateHUD();
       checkWinLose();
     } else {
+      sfxFail();
       swap(c1, r1, c2, r2);
       render({ animate: 'swap' });
       await sleep(220);
@@ -804,84 +1927,45 @@ function checkCombo(c1, r1, c2, r2) {
   if (!a || !b) return null;
   const sa = a.special, sb = b.special;
   if (!sa && !sb) return null;
-
   if (sa === 'bomb' && sb === 'bomb') return { type: 'bomb+bomb' };
   if (sa === 'bomb' || sb === 'bomb') {
     const other = sa === 'bomb' ? b : a;
-    const bombR = sa === 'bomb' ? r1 : r2;
-    const bombC = sa === 'bomb' ? c1 : c2;
-    if (other.special === 'striped-h' || other.special === 'striped-v')
-      return { type: 'bomb+striped', color: other.color, bombR, bombC };
-    if (other.special === 'wrapped')
-      return { type: 'bomb+wrapped', color: other.color, bombR, bombC };
+    const bombR = sa === 'bomb' ? r1 : r2, bombC = sa === 'bomb' ? c1 : c2;
+    if (other.special === 'striped-h' || other.special === 'striped-v') return { type: 'bomb+striped', color: other.color, bombR, bombC };
+    if (other.special === 'wrapped') return { type: 'bomb+wrapped', color: other.color, bombR, bombC };
     return { type: 'bomb+normal', color: other.color, bombR, bombC };
   }
-
-  const isStriped = s => s === 'striped-h' || s === 'striped-v';
-  if (isStriped(sa) && isStriped(sb)) return { type: 'striped+striped', r1, c1, r2, c2 };
+  const isS = s => s === 'striped-h' || s === 'striped-v';
+  if (isS(sa) && isS(sb)) return { type: 'striped+striped', r1, c1, r2, c2 };
   if (sa === 'wrapped' && sb === 'wrapped') return { type: 'wrapped+wrapped', r1, c1, r2, c2 };
-  if ((isStriped(sa) && sb === 'wrapped') || (sa === 'wrapped' && isStriped(sb)))
-    return { type: 'striped+wrapped', r: (r1+r2)/2|0, c: (c1+c2)/2|0 };
-
+  if ((isS(sa) && sb === 'wrapped') || (sa === 'wrapped' && isS(sb))) return { type: 'striped+wrapped', r:(r1+r2)/2|0, c:(c1+c2)/2|0 };
   return null;
 }
 
 function applyCombo(combo, c1, r1, c2, r2) {
+  sfxBigCombo();
+  screenShake();
   const toClear = new Set();
-  const add = (r, c) => { if (r >= 0 && r < ROWS && c >= 0 && c < COLS) toClear.add(r * COLS + c); };
-
+  const add = (r,c) => { if (r>=0&&r<ROWS&&c>=0&&c<COLS) toClear.add(r*COLS+c); };
   switch (combo.type) {
-    case 'bomb+bomb':
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) add(r, c);
-      break;
-    case 'bomb+normal':
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
-        if (grid[r][c]?.color === combo.color) add(r, c);
-      add(combo.bombR, combo.bombC);
-      break;
-    case 'bomb+striped':
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
-        if (grid[r][c]?.color === combo.color) {
-          add(r, c);
-          for (let cc = 0; cc < COLS; cc++) add(r, cc);
-          for (let rr = 0; rr < ROWS; rr++) add(rr, c);
-        }
-      add(combo.bombR, combo.bombC);
-      break;
-    case 'bomb+wrapped':
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
-        if (grid[r][c]?.color === combo.color) {
-          add(r, c);
-          for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) add(r+dr, c+dc);
-        }
-      add(combo.bombR, combo.bombC);
-      break;
-    case 'striped+striped':
-      for (let c = 0; c < COLS; c++) { add(combo.r1, c); add(combo.r2, c); }
-      for (let r = 0; r < ROWS; r++) { add(r, combo.c1); add(r, combo.c2); }
-      break;
-    case 'wrapped+wrapped':
-      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
-        add(combo.r1+dr, combo.c1+dc);
-        add(combo.r2+dr, combo.c2+dc);
-      }
-      break;
-    case 'striped+wrapped':
-      for (let d = -1; d <= 1; d++) {
-        for (let c = 0; c < COLS; c++) add(combo.r+d, c);
-        for (let r = 0; r < ROWS; r++) add(r, combo.c+d);
-      }
-      break;
+    case 'bomb+bomb': for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) add(r,c); break;
+    case 'bomb+normal': for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(grid[r][c]?.color===combo.color) add(r,c); add(combo.bombR,combo.bombC); break;
+    case 'bomb+striped': for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(grid[r][c]?.color===combo.color){add(r,c);for(let cc=0;cc<COLS;cc++) add(r,cc);for(let rr=0;rr<ROWS;rr++) add(rr,c);} add(combo.bombR,combo.bombC); break;
+    case 'bomb+wrapped': for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(grid[r][c]?.color===combo.color){add(r,c);for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) add(r+dr,c+dc);} add(combo.bombR,combo.bombC); break;
+    case 'striped+striped': for(let c=0;c<COLS;c++){add(combo.r1,c);add(combo.r2,c);} for(let r=0;r<ROWS;r++){add(r,combo.c1);add(r,combo.c2);} break;
+    case 'wrapped+wrapped': for(let dr=-2;dr<=2;dr++) for(let dc=-2;dc<=2;dc++){add(combo.r1+dr,combo.c1+dc);add(combo.r2+dr,combo.c2+dc);} break;
+    case 'striped+wrapped': for(let d=-1;d<=1;d++){for(let c=0;c<COLS;c++) add(combo.r+d,c);for(let r=0;r<ROWS;r++) add(r,combo.c+d);} break;
   }
-
   renderClearing([...toClear]);
   let pts = 0;
   toClear.forEach(idx => {
-    const r = Math.floor(idx / COLS), c = idx % COLS;
+    const r = Math.floor(idx/COLS), c = idx%COLS;
     if (grid[r][c]) {
-      grid[r][c] = null;
-      pts += 20;
-      if (jelly[r][c] > 0) { jelly[r][c]--; pts += 50; }
+      trackCollect(grid[r][c].color);
+      grid[r][c] = null; pts += 20;
+      if (jelly[r][c]>0){jelly[r][c]--;pts+=50;}
+      if (chocolate[r][c]){chocolate[r][c]=false;pts+=30;}
+      countdownBombs[r][c] = 0;
     }
   });
   score += pts;
@@ -890,24 +1974,16 @@ function applyCombo(combo, c1, r1, c2, r2) {
 
 function findMatches() {
   const matched = new Set();
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS - 2; c++) {
-      if (grid[r][c] && grid[r][c+1] && grid[r][c+2] &&
-          grid[r][c].color === grid[r][c+1].color && grid[r][c].color === grid[r][c+2].color) {
-        let end = c + 2;
-        while (end+1 < COLS && grid[r][end+1]?.color === grid[r][c].color) end++;
-        for (let i = c; i <= end; i++) matched.add(r * COLS + i);
-      }
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS-2;c++) {
+    if (grid[r][c]&&grid[r][c+1]&&grid[r][c+2]&&grid[r][c].color===grid[r][c+1].color&&grid[r][c].color===grid[r][c+2].color) {
+      let end=c+2; while(end+1<COLS&&grid[r][end+1]?.color===grid[r][c].color) end++;
+      for(let i=c;i<=end;i++) matched.add(r*COLS+i);
     }
   }
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS - 2; r++) {
-      if (grid[r][c] && grid[r+1][c] && grid[r+2][c] &&
-          grid[r][c].color === grid[r+1][c].color && grid[r][c].color === grid[r+2][c].color) {
-        let end = r + 2;
-        while (end+1 < ROWS && grid[end+1]?.[c]?.color === grid[r][c].color) end++;
-        for (let i = r; i <= end; i++) matched.add(i * COLS + c);
-      }
+  for (let c=0;c<COLS;c++) for (let r=0;r<ROWS-2;r++) {
+    if (grid[r][c]&&grid[r+1][c]&&grid[r+2][c]&&grid[r][c].color===grid[r+1][c].color&&grid[r][c].color===grid[r+2][c].color) {
+      let end=r+2; while(end+1<ROWS&&grid[end+1]?.[c]?.color===grid[r][c].color) end++;
+      for(let i=r;i<=end;i++) matched.add(i*COLS+c);
     }
   }
   return [...matched];
@@ -915,84 +1991,32 @@ function findMatches() {
 
 function findMatchGroups() {
   const groups = [];
-  for (let r = 0; r < ROWS; r++) {
-    let c = 0;
-    while (c < COLS) {
-      if (!grid[r][c]) { c++; continue; }
-      let end = c;
-      while (end+1 < COLS && grid[r][end+1]?.color === grid[r][c].color) end++;
-      if (end - c >= 2) {
-        groups.push({ cells: [], color: grid[r][c].color, dir: 'h' });
-        for (let i = c; i <= end; i++) groups[groups.length-1].cells.push({ r, c: i });
-      }
-      c = end + 1;
-    }
-  }
-  for (let c = 0; c < COLS; c++) {
-    let r = 0;
-    while (r < ROWS) {
-      if (!grid[r][c]) { r++; continue; }
-      let end = r;
-      while (end+1 < ROWS && grid[end+1]?.[c]?.color === grid[r][c].color) end++;
-      if (end - r >= 2) {
-        groups.push({ cells: [], color: grid[r][c].color, dir: 'v' });
-        for (let i = r; i <= end; i++) groups[groups.length-1].cells.push({ r: i, c });
-      }
-      r = end + 1;
-    }
-  }
+  for (let r=0;r<ROWS;r++) { let c=0; while(c<COLS){if(!grid[r][c]){c++;continue;} let end=c; while(end+1<COLS&&grid[r][end+1]?.color===grid[r][c].color) end++; if(end-c>=2){const g={cells:[],color:grid[r][c].color,dir:'h'};for(let i=c;i<=end;i++) g.cells.push({r,c:i});groups.push(g);} c=end+1;} }
+  for (let c=0;c<COLS;c++) { let r=0; while(r<ROWS){if(!grid[r][c]){r++;continue;} let end=r; while(end+1<ROWS&&grid[end+1]?.[c]?.color===grid[r][c].color) end++; if(end-r>=2){const g={cells:[],color:grid[r][c].color,dir:'v'};for(let i=r;i<=end;i++) g.cells.push({r:i,c});groups.push(g);} r=end+1;} }
   return groups;
 }
 
 function detectSpecials(groups) {
   const specials = [];
-  for (let i = 0; i < groups.length; i++) {
-    for (let j = i+1; j < groups.length; j++) {
-      if (groups[i].color !== groups[j].color) continue;
-      const overlap = groups[i].cells.find(a => groups[j].cells.some(b => a.r === b.r && a.c === b.c));
-      if (overlap) {
-        const combined = new Set();
-        groups[i].cells.forEach(p => combined.add(p.r+','+p.c));
-        groups[j].cells.forEach(p => combined.add(p.r+','+p.c));
-        if (combined.size >= 5) {
-          specials.push({ r: overlap.r, c: overlap.c, type: 'wrapped', color: groups[i].color });
-          groups[i].used = true; groups[j].used = true;
-        }
-      }
-    }
+  for (let i=0;i<groups.length;i++) for (let j=i+1;j<groups.length;j++) {
+    if(groups[i].color!==groups[j].color) continue;
+    const overlap = groups[i].cells.find(a=>groups[j].cells.some(b=>a.r===b.r&&a.c===b.c));
+    if(overlap){const combined=new Set();groups[i].cells.forEach(p=>combined.add(p.r+','+p.c));groups[j].cells.forEach(p=>combined.add(p.r+','+p.c));
+      if(combined.size>=5){specials.push({r:overlap.r,c:overlap.c,type:'wrapped',color:groups[i].color});groups[i].used=true;groups[j].used=true;}}
   }
-  groups.forEach(g => {
-    if (g.used) return;
-    if (g.cells.length >= 5) {
-      const mid = g.cells[Math.floor(g.cells.length/2)];
-      specials.push({ r: mid.r, c: mid.c, type: 'bomb', color: -1 });
-      g.used = true;
-    } else if (g.cells.length === 4) {
-      const mid = g.cells[1];
-      specials.push({ r: mid.r, c: mid.c, type: g.dir === 'h' ? 'striped-v' : 'striped-h', color: g.color });
-      g.used = true;
-    }
+  groups.forEach(g=>{if(g.used) return;
+    if(g.cells.length>=5){const mid=g.cells[Math.floor(g.cells.length/2)];specials.push({r:mid.r,c:mid.c,type:'bomb',color:-1});g.used=true;}
+    else if(g.cells.length===4){const mid=g.cells[1];specials.push({r:mid.r,c:mid.c,type:g.dir==='h'?'striped-v':'striped-h',color:g.color});g.used=true;}
   });
   return specials;
 }
 
 function activateSpecial(special, r, c, toClear) {
-  switch (special) {
-    case 'striped-h':
-      for (let cc = 0; cc < COLS; cc++) toClear.add(r * COLS + cc); break;
-    case 'striped-v':
-      for (let rr = 0; rr < ROWS; rr++) toClear.add(rr * COLS + c); break;
-    case 'wrapped':
-      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++)
-        if (r+dr >= 0 && r+dr < ROWS && c+dc >= 0 && c+dc < COLS)
-          toClear.add((r+dr)*COLS+(c+dc));
-      break;
-    case 'bomb':
-      const targetColor = grid[r][c]?.color;
-      if (targetColor != null && targetColor >= 0)
-        for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++)
-          if (grid[rr][cc]?.color === targetColor) toClear.add(rr*COLS+cc);
-      break;
+  switch(special){
+    case 'striped-h': for(let cc=0;cc<COLS;cc++) toClear.add(r*COLS+cc); break;
+    case 'striped-v': for(let rr=0;rr<ROWS;rr++) toClear.add(rr*COLS+c); break;
+    case 'wrapped': for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) if(r+dr>=0&&r+dr<ROWS&&c+dc>=0&&c+dc<COLS) toClear.add((r+dr)*COLS+(c+dc)); break;
+    case 'bomb': {const tc=grid[r][c]?.color; if(tc!=null&&tc>=0) for(let rr=0;rr<ROWS;rr++) for(let cc=0;cc<COLS;cc++) if(grid[rr][cc]?.color===tc) toClear.add(rr*COLS+cc);} break;
   }
 }
 
@@ -1000,49 +2024,62 @@ function clearAndSpawnSpecials() {
   const groups = findMatchGroups();
   if (groups.length === 0) return false;
 
+  const hasSpecialMatch = groups.some(g => g.cells.length >= 4);
+  if (hasSpecialMatch) sfxSpecial();
+  else sfxMatch(cascadeCount);
+
+  if (cascadeCount >= 2) { screenShake(); showCascadeLabel(cascadeCount); }
+
   const specials = detectSpecials(groups);
   const toClear = new Set();
   const triggerSpecials = new Set();
 
   groups.forEach(g => g.cells.forEach(p => {
-    const idx = p.r * COLS + p.c;
+    const idx = p.r*COLS+p.c;
     toClear.add(idx);
     if (grid[p.r][p.c]?.special) triggerSpecials.add(idx);
   }));
 
   triggerSpecials.forEach(idx => {
-    const r = Math.floor(idx/COLS), c = idx % COLS;
-    const cell = grid[r][c];
-    if (!cell) return;
-    activateSpecial(cell.special, r, c, toClear);
+    const r=Math.floor(idx/COLS),c=idx%COLS;
+    if(grid[r][c]) activateSpecial(grid[r][c].special, r, c, toClear);
   });
 
   renderClearing([...toClear]);
-
   let pts = 0;
-  const basePoints = 30 + cascadeCount * 20;
+  const base = 30 + cascadeCount * 25;
   toClear.forEach(idx => {
-    const r = Math.floor(idx/COLS), c = idx % COLS;
+    const r=Math.floor(idx/COLS),c=idx%COLS;
     if (grid[r][c]) {
-      const isSpecialSpot = specials.some(s => s.r === r && s.c === c);
-      if (!isSpecialSpot) grid[r][c] = null;
-      pts += basePoints;
-      if (jelly[r][c] > 0) { jelly[r][c]--; pts += 100; }
+      const isSpecialSpot = specials.some(s=>s.r===r&&s.c===c);
+      trackCollect(grid[r][c].color);
+      if(!isSpecialSpot) grid[r][c]=null;
+      pts+=base;
+      if(jelly[r][c]>0){jelly[r][c]--;pts+=100;}
+      if(chocolate[r][c]){chocolate[r][c]=false;pts+=30;}
+      countdownBombs[r][c]=0;
     }
   });
 
   specials.forEach(s => {
-    grid[s.r][s.c] = { color: s.color === -1 ? 0 : s.color, special: s.type, id: genId() };
-    if (s.type === 'bomb') grid[s.r][s.c].color = -1;
+    grid[s.r][s.c] = {color:s.color===-1?0:s.color,special:s.type,id:genId()};
+    if(s.type==='bomb') grid[s.r][s.c].color=-1;
   });
 
   score += pts;
   if (pts > 0) {
-    const cells = [...toClear];
-    const idx = cells[Math.floor(cells.length/2)];
-    showFloatingText(idx % COLS, Math.floor(idx/COLS), pts);
+    const cells=[...toClear]; const idx=cells[Math.floor(cells.length/2)];
+    showFloatingText(idx%COLS,Math.floor(idx/COLS),pts);
   }
   return true;
+}
+
+function trackCollect(color) {
+  if (levelData.type === 'collect' && levelData._collected) {
+    if (levelData.collect[color] !== undefined) {
+      levelData._collected[color] = (levelData._collected[color] || 0) + 1;
+    }
+  }
 }
 
 function applyGravity() {
@@ -1050,23 +2087,28 @@ function applyGravity() {
   const spawned = new Set();
   for (let c = 0; c < COLS; c++) {
     let writePos = ROWS - 1;
-    for (let r = ROWS - 1; r >= 0; r--) {
+    for (let r = ROWS-1; r >= 0; r--) {
+      if (chocolate[r][c]) { writePos = r - 1; continue; }
       if (grid[r][c]) {
         if (r !== writePos) {
           grid[writePos][c] = grid[r][c];
+          countdownBombs[writePos][c] = countdownBombs[r][c];
           grid[r][c] = null;
+          countdownBombs[r][c] = 0;
           moved = true;
         }
         writePos--;
       }
     }
     for (let r = writePos; r >= 0; r--) {
-      const newCell = { color: Math.floor(Math.random() * COLORS), special: null, id: genId() };
+      if (chocolate[r][c]) continue;
+      const newCell = {color:Math.floor(Math.random()*colorCount),special:null,id:genId()};
       grid[r][c] = newCell;
       spawned.add(newCell.id);
       moved = true;
     }
   }
+  if (moved) sfxDrop();
   return { moved, spawned };
 }
 
@@ -1074,28 +2116,68 @@ async function resolveBoardLoop() {
   while (true) {
     const cleared = clearAndSpawnSpecials();
     if (!cleared) { render(); updateHUD(); break; }
-    await sleep(350);
+    await sleep(320);
     const { moved, spawned } = applyGravity();
     render({ animate: 'fall', spawned });
     updateHUD();
-    await sleep(350);
+    await sleep(320);
     cascadeCount++;
   }
 }
 
-function hasValidMoves() {
+function tickCountdownBombs() {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (countdownBombs[r][c] > 0) countdownBombs[r][c]--;
+}
+
+function checkBombExploded() {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (countdownBombs[r][c] === 0 && grid[r][c] && levelData.bombs) {
+        // only check if there WERE bombs
+      }
+  // actually check if any reached 0 after tick
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (countdownBombs[r][c] === 0 && grid[r][c]) {
+        // bomb timers that hit 0 were already cleared or never existed
+      }
+  return false;
+}
+
+function spreadChocolate() {
+  if (levelData.type !== 'chocolate') return;
+  const newChoc = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      if (c+1 < COLS) {
-        swap(c, r, c+1, r);
-        if (findMatches().length > 0 || checkCombo(c, r, c+1, r)) { swap(c, r, c+1, r); return true; }
-        swap(c, r, c+1, r);
+      if (!chocolate[r][c]) continue;
+      const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+      const valid = dirs.filter(([dr,dc]) => {
+        const nr=r+dr,nc=c+dc;
+        return nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!chocolate[nr][nc];
+      });
+      if (valid.length > 0 && Math.random() < 0.25) {
+        const [dr,dc] = valid[Math.floor(Math.random()*valid.length)];
+        newChoc.push([r+dr, c+dc]);
       }
-      if (r+1 < ROWS) {
-        swap(c, r, c, r+1);
-        if (findMatches().length > 0 || checkCombo(c, r, c, r+1)) { swap(c, r, c, r+1); return true; }
-        swap(c, r, c, r+1);
-      }
+    }
+  }
+  newChoc.forEach(([r,c]) => chocolate[r][c] = true);
+}
+
+function hasValidMoves() {
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+    if (chocolate[r][c]) continue;
+    if (c+1<COLS && !chocolate[r][c+1]) {
+      swap(c,r,c+1,r);
+      if(findMatches().length>0||checkCombo(c,r,c+1,r)){swap(c,r,c+1,r);return true;}
+      swap(c,r,c+1,r);
+    }
+    if (r+1<ROWS && !chocolate[r+1][c]) {
+      swap(c,r,c,r+1);
+      if(findMatches().length>0||checkCombo(c,r,c,r+1)){swap(c,r,c,r+1);return true;}
+      swap(c,r,c,r+1);
     }
   }
   return false;
@@ -1103,74 +2185,888 @@ function hasValidMoves() {
 
 function shuffleBoard() {
   const pieces = [];
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c]) pieces.push(grid[r][c]);
-  for (let i = pieces.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [pieces[i],pieces[j]] = [pieces[j],pieces[i]]; }
-  let idx = 0;
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid[r][c] = pieces[idx++];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(grid[r][c]&&!chocolate[r][c]) pieces.push(grid[r][c]);
+  for(let i=pieces.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pieces[i],pieces[j]]=[pieces[j],pieces[i]];}
+  let idx=0;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(!chocolate[r][c]) grid[r][c]=pieces[idx++];
 }
 
 function checkWinLose() {
-  const won = levelData.type === 'score' ? score >= levelData.target : jellyRemaining() === 0;
+  let won = false;
+  if (levelData.type === 'score') won = score >= levelData.target;
+  else if (levelData.type === 'jelly') won = jellyRemaining() === 0;
+  else if (levelData.type === 'chocolate') won = chocolateRemaining() === 0;
+  else if (levelData.type === 'collect') {
+    won = Object.entries(levelData.collect).every(([col,needed]) => (levelData._collected[col]||0) >= needed);
+  }
+
+  // check countdown bombs
+  for (let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+    if (countdownBombs[r][c] === 0 && grid[r][c]) {
+      // find if this was a bomb tile that reached 0
+    }
+  }
+
   if (won) {
     busy = true;
-    const stars = levelData.type === 'score'
-      ? (score >= levelData.target*3 ? 3 : score >= levelData.target*2 ? 2 : 1)
-      : (moves >= 10 ? 3 : moves >= 5 ? 2 : 1);
-    setTimeout(() => showOverlay('Level Complete!',
-      `<div class="stars">${'<span class="star-on">&#9733;</span>'.repeat(stars)}${'<span class="star-off">&#9733;</span>'.repeat(3-stars)}</div><p>Score: ${score}</p>`,
-      'Next Level', () => { level++; startLevel(); }), 500);
+    sfxWin();
+    const stars = moves >= 15 ? 3 : moves >= 8 ? 2 : 1;
+    levelStars[level] = Math.max(levelStars[level] || 0, stars);
+    if (level >= maxLevel) maxLevel = level + 1;
+    localStorage.setItem('fc_maxLevel', maxLevel);
+    localStorage.setItem('fc_stars', JSON.stringify(levelStars));
+    // reward boosters every 3 levels
+    if (level % 3 === 0) { boosters.hammer++; boosters.shuffle++; saveBoosters(); }
+    setTimeout(() => showResultOverlay(true, stars), 600);
     return;
   }
+
   if (moves <= 0) {
     busy = true;
-    setTimeout(() => showOverlay('Out of Moves',
-      `<p>Score: ${score}</p>`, 'Try Again', () => startLevel()), 500);
+    sfxFail();
+    setTimeout(() => showResultOverlay(false, 0), 600);
     return;
   }
+
   if (!hasValidMoves()) { shuffleBoard(); render(); }
 }
 
-function showOverlay(title, bodyHTML, btnText, onClick) {
-  overlayEl.innerHTML = `<h1 class="title-gradient">${title}</h1>${bodyHTML}<button class="btn" id="overlay-btn">${btnText}</button>`;
-  overlayEl.style.display = 'flex';
-  document.getElementById('overlay-btn').addEventListener('click', () => {
-    overlayEl.style.display = 'none';
-    onClick();
+function showResultOverlay(won, stars) {
+  let html = '';
+  if (won) {
+    html = `<h1 style="background:linear-gradient(135deg,#ffcc00,#44e5a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Level Complete!</h1>
+      <div class="stars">${'<span class="star-on">★</span>'.repeat(stars)}${'<span class="star-off">★</span>'.repeat(3-stars)}</div>
+      <p>Score: ${score}</p>
+      <button class="btn" id="overlay-next">Next Level</button>
+      <button class="btn btn-secondary" id="overlay-map">Level Map</button>`;
+  } else {
+    html = `<h1 style="color:#ff5c8a;">Out of Moves</h1>
+      <p>Score: ${score}</p>
+      <button class="btn" id="overlay-retry">Try Again</button>
+      <button class="btn btn-secondary" id="overlay-map">Level Map</button>`;
+  }
+  overlayEl.innerHTML = html;
+  overlayEl.classList.add('visible');
+
+  if (won) {
+    document.getElementById('overlay-next').addEventListener('click', () => {
+      overlayEl.classList.remove('visible');
+      level++;
+      startLevel();
+    });
+  } else {
+    document.getElementById('overlay-retry').addEventListener('click', () => {
+      overlayEl.classList.remove('visible');
+      startLevel();
+    });
+  }
+  document.getElementById('overlay-map').addEventListener('click', () => {
+    overlayEl.classList.remove('visible');
+    renderMap();
+    showScreen('map');
   });
 }
 
-function showFloatingText(c, r, pts) {
-  const el = document.createElement('div');
-  el.className = 'combo-text';
-  el.textContent = '+' + pts;
-  el.style.left = (c * CELL + CELL/2 - 20 + PAD) + 'px';
-  el.style.top = (r * CELL + PAD) + 'px';
-  boardEl.appendChild(el);
-  setTimeout(() => el.remove(), 900);
+// ===== BOOSTERS =====
+function saveBoosters() { localStorage.setItem('fc_boosters', JSON.stringify(boosters)); }
+
+document.getElementById('boost-hammer').addEventListener('click', () => {
+  if (busy || boosters.hammer <= 0) return;
+  sfxClick();
+  activeBooster = activeBooster === 'hammer' ? null : 'hammer';
+  document.getElementById('boost-hammer').classList.toggle('active', activeBooster === 'hammer');
+});
+
+async function useHammer(c, r) {
+  if (boosters.hammer <= 0) return;
+  boosters.hammer--;
+  saveBoosters();
+  activeBooster = null;
+  document.getElementById('boost-hammer').classList.remove('active');
+  sfxBooster();
+  busy = true;
+  spawnParticles(c, r, grid[r][c]?.color || 0);
+  if (grid[r][c]) {
+    trackCollect(grid[r][c].color);
+    grid[r][c] = null;
+  }
+  if (jelly[r][c] > 0) jelly[r][c]--;
+  if (chocolate[r][c]) chocolate[r][c] = false;
+  countdownBombs[r][c] = 0;
+  screenShake();
+  await sleep(200);
+  const {moved, spawned} = applyGravity();
+  render({animate:'fall',spawned});
+  await sleep(300);
+  cascadeCount = 0;
+  await resolveBoardLoop();
+  updateHUD();
+  checkWinLose();
+  busy = false;
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+document.getElementById('boost-shuffle').addEventListener('click', () => {
+  if (busy || boosters.shuffle <= 0) return;
+  boosters.shuffle--;
+  saveBoosters();
+  sfxBooster();
+  shuffleBoard();
+  render();
+  updateHUD();
+});
+
+document.getElementById('boost-moves').addEventListener('click', () => {
+  if (busy || boosters.moves <= 0) return;
+  boosters.moves--;
+  saveBoosters();
+  sfxBooster();
+  moves += 5;
+  updateHUD();
+});
+
+// ===== START =====
+document.getElementById('back-btn').addEventListener('click', () => {
+  sfxClick();
+  busy = false;
+  showScreen('map');
+  try { renderMap(); } catch(e) {}
+});
+
+document.getElementById('sound-btn').addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  document.getElementById('sound-btn').textContent = soundEnabled ? '🔊' : '🔇';
+  sfxClick();
+});
 
 function startLevel() {
+  initAudio();
+  updateCellSize();
   levelData = getLevel(level);
+  colorCount = level >= 15 ? 8 : level >= 8 ? 7 : COLORS;
+  if (levelData.type === 'collect') levelData._collected = {};
   moves = levelData.moves;
   score = 0;
   selected = null;
   busy = false;
+  activeBooster = null;
+  document.getElementById('boost-hammer').classList.remove('active');
   initGrid();
   initJelly();
+  initChocolate();
+  initCountdownBombs();
   while (findMatches().length > 0) initGrid();
   render();
   updateHUD();
+  showScreen('game');
 }
 
-document.getElementById('start-btn').addEventListener('click', () => {
-  overlayEl.style.display = 'none';
-  level = 1;
-  startLevel();
+window.addEventListener('resize', () => {
+  if (document.getElementById('game-screen').classList.contains('active')) {
+    updateCellSize();
+    render();
+  }
 });
 
-setupDrag();
+// ===== QUIZ SHOP =====
+const QUIZ_BANKS = {
+  worldcup: [
+    { q: "Which country has won the most FIFA World Cups?", opts: ["Germany","Argentina","Brazil","Italy"], ans: 2 },
+    { q: "Who scored the 'Hand of God' goal in 1986?", opts: ["Pelé","Diego Maradona","Zinedine Zidane","Ronaldo"], ans: 1 },
+    { q: "Which country hosted the 2022 FIFA World Cup?", opts: ["Russia","USA","Qatar","Japan"], ans: 2 },
+    { q: "Who won the 2018 FIFA World Cup?", opts: ["Croatia","Brazil","Germany","France"], ans: 3 },
+    { q: "How many players are on a football team on the field?", opts: ["9","10","11","12"], ans: 2 },
+    { q: "Which player has scored the most World Cup goals ever?", opts: ["Miroslav Klose","Ronaldo","Pelé","Just Fontaine"], ans: 0 },
+    { q: "In what year was the first FIFA World Cup held?", opts: ["1926","1930","1934","1928"], ans: 1 },
+    { q: "Which country won the first ever World Cup?", opts: ["Brazil","Argentina","Uruguay","Italy"], ans: 2 },
+    { q: "Who won the Golden Ball at the 2022 World Cup?", opts: ["Kylian Mbappé","Luka Modrić","Lionel Messi","Emi Martínez"], ans: 2 },
+    { q: "Which World Cup had the famous 'Zidane headbutt'?", opts: ["2002","2006","2010","1998"], ans: 1 },
+    { q: "What is the World Cup trophy called?", opts: ["FIFA Cup","Golden Globe","Jules Rimet Trophy","Victory Cup"], ans: 2 },
+    { q: "Which country has appeared in the most World Cup finals?", opts: ["Germany","Brazil","Italy","Argentina"], ans: 0 },
+    { q: "Who scored the fastest World Cup hat-trick?", opts: ["Pelé","Hakan Şükür","Fabienne Humm","Cristiano Ronaldo"], ans: 2 },
+    { q: "Which African country reached the World Cup quarter-finals in 2010?", opts: ["Nigeria","Ghana","Cameroon","Senegal"], ans: 1 },
+    { q: "How often is the FIFA World Cup held?", opts: ["Every 2 years","Every 3 years","Every 4 years","Every 5 years"], ans: 2 },
+    { q: "Who scored the winning goal in the 2014 World Cup final?", opts: ["Lionel Messi","Thomas Müller","Mario Götze","Neymar"], ans: 2 },
+    { q: "Which country won the 2010 World Cup?", opts: ["Netherlands","Spain","Germany","Brazil"], ans: 1 },
+    { q: "Where will the 2026 FIFA World Cup be held?", opts: ["UK","USA/Canada/Mexico","Australia","China"], ans: 1 },
+    { q: "Who is the youngest player to score in a World Cup final?", opts: ["Pelé","Mbappé","Ronaldo","Owen"], ans: 0 },
+    { q: "Which team was unbeaten in the 2002 World Cup group stage but didn't advance?", opts: ["South Korea","Sweden","Spain","Nigeria"], ans: 0 },
+  ],
+  nba: [
+    { q: "Who has won the most NBA championships as a player?", opts: ["Michael Jordan","Bill Russell","LeBron James","Kareem Abdul-Jabbar"], ans: 1 },
+    { q: "What team drafted LeBron James in 2003?", opts: ["Miami Heat","LA Lakers","Cleveland Cavaliers","Chicago Bulls"], ans: 2 },
+    { q: "Who holds the record for most points in a single NBA game?", opts: ["Kobe Bryant","Michael Jordan","Wilt Chamberlain","Kareem Abdul-Jabbar"], ans: 2 },
+    { q: "How many points did Wilt Chamberlain score in his record game?", opts: ["81","90","100","75"], ans: 2 },
+    { q: "Which team has won the most NBA titles?", opts: ["LA Lakers","Chicago Bulls","Boston Celtics","Golden State Warriors"], ans: 2 },
+    { q: "Who is known as 'The Greek Freak'?", opts: ["Luka Doncic","Giannis Antetokounmpo","Nikola Jokic","Joel Embiid"], ans: 1 },
+    { q: "What year was the NBA founded?", opts: ["1936","1946","1956","1960"], ans: 1 },
+    { q: "Who won NBA MVP in 2023?", opts: ["LeBron James","Giannis Antetokounmpo","Joel Embiid","Nikola Jokic"], ans: 2 },
+    { q: "How many games are in a regular NBA season per team?", opts: ["72","78","82","88"], ans: 2 },
+    { q: "Which player is called 'King James'?", opts: ["James Harden","LeBron James","James Worthy","Chris Paul"], ans: 1 },
+    { q: "What team did Michael Jordan play most of his career for?", opts: ["Washington Wizards","Chicago Bulls","Charlotte Hornets","New York Knicks"], ans: 1 },
+    { q: "Who won the 2024 NBA Finals?", opts: ["Denver Nuggets","Boston Celtics","Dallas Mavericks","Miami Heat"], ans: 1 },
+    { q: "How tall is a standard NBA basketball hoop?", opts: ["9 feet","10 feet","11 feet","12 feet"], ans: 1 },
+    { q: "Which player has the most career assists in NBA history?", opts: ["Magic Johnson","Chris Paul","John Stockton","Steve Nash"], ans: 2 },
+    { q: "What is a 'triple-double' in basketball?", opts: ["30 points in a game","Double digits in 3 stat categories","3 consecutive dunks","3 three-pointers in a row"], ans: 1 },
+  ],
+  nfl: [
+    { q: "Which team has won the most Super Bowls?", opts: ["Dallas Cowboys","New England Patriots","Pittsburgh Steelers","San Francisco 49ers"], ans: 1 },
+    { q: "Who is the all-time NFL passing yards leader?", opts: ["Peyton Manning","Drew Brees","Tom Brady","Aaron Rodgers"], ans: 2 },
+    { q: "How many players are on the field per team in football?", opts: ["9","10","11","12"], ans: 2 },
+    { q: "What is the championship game of the NFL called?", opts: ["World Series","Super Bowl","Stanley Cup","NBA Finals"], ans: 1 },
+    { q: "Who won Super Bowl LVIII (2024)?", opts: ["San Francisco 49ers","Kansas City Chiefs","Philadelphia Eagles","Baltimore Ravens"], ans: 1 },
+    { q: "How many quarters are in an NFL game?", opts: ["2","3","4","5"], ans: 2 },
+    { q: "What is a touchdown worth in points?", opts: ["3","5","6","7"], ans: 2 },
+    { q: "Which QB is known as 'The GOAT'?", opts: ["Joe Montana","Peyton Manning","Tom Brady","Patrick Mahomes"], ans: 2 },
+    { q: "How long is an NFL football field in yards?", opts: ["80","90","100","120"], ans: 2 },
+    { q: "What team does Patrick Mahomes play for?", opts: ["Buffalo Bills","Kansas City Chiefs","Dallas Cowboys","Green Bay Packers"], ans: 1 },
+    { q: "Which player has the most career rushing yards?", opts: ["Walter Payton","Barry Sanders","Emmitt Smith","Adrian Peterson"], ans: 2 },
+    { q: "How many teams are in the NFL?", opts: ["28","30","32","36"], ans: 2 },
+    { q: "What is a field goal worth in points?", opts: ["1","2","3","6"], ans: 2 },
+    { q: "Which city do the Packers represent?", opts: ["Milwaukee","Green Bay","Madison","Chicago"], ans: 1 },
+    { q: "What event determines NFL draft order?", opts: ["Coin flip","Previous season record (worst picks first)","Random draw","Fan voting"], ans: 1 },
+  ],
+  geography: [
+    { q: "What is the largest country by area?", opts: ["China","USA","Canada","Russia"], ans: 3 },
+    { q: "What is the smallest country in the world?", opts: ["Monaco","Vatican City","San Marino","Liechtenstein"], ans: 1 },
+    { q: "Which river is the longest in the world?", opts: ["Amazon","Mississippi","Nile","Yangtze"], ans: 2 },
+    { q: "What is the capital of Australia?", opts: ["Sydney","Melbourne","Canberra","Brisbane"], ans: 2 },
+    { q: "Which ocean is the largest?", opts: ["Atlantic","Indian","Arctic","Pacific"], ans: 3 },
+    { q: "Mt. Everest is located in which mountain range?", opts: ["Andes","Alps","Rockies","Himalayas"], ans: 3 },
+    { q: "How many continents are there?", opts: ["5","6","7","8"], ans: 2 },
+    { q: "What is the capital of Brazil?", opts: ["Rio de Janeiro","São Paulo","Brasília","Salvador"], ans: 2 },
+    { q: "Which desert is the largest hot desert?", opts: ["Gobi","Kalahari","Sahara","Arabian"], ans: 2 },
+    { q: "In which country is the Great Barrier Reef?", opts: ["Indonesia","Philippines","Australia","Fiji"], ans: 2 },
+    { q: "What is the most populated country in the world?", opts: ["China","USA","India","Indonesia"], ans: 2 },
+    { q: "Which country has the most time zones?", opts: ["Russia","USA","China","France"], ans: 3 },
+    { q: "What is the capital of Canada?", opts: ["Toronto","Vancouver","Montreal","Ottawa"], ans: 3 },
+    { q: "Which African country is the most populous?", opts: ["Egypt","South Africa","Nigeria","Ethiopia"], ans: 2 },
+    { q: "What strait separates Europe from Africa?", opts: ["Bering Strait","Strait of Hormuz","Strait of Gibraltar","Strait of Malacca"], ans: 2 },
+  ],
+  music: [
+    { q: "Which band released 'Bohemian Rhapsody'?", opts: ["The Beatles","Led Zeppelin","Queen","Pink Floyd"], ans: 2 },
+    { q: "Who is known as the 'King of Pop'?", opts: ["Elvis Presley","Prince","Michael Jackson","Stevie Wonder"], ans: 2 },
+    { q: "What instrument does a drummer play?", opts: ["Guitar","Bass","Drums","Keyboard"], ans: 2 },
+    { q: "Which artist released the album 'Thriller'?", opts: ["Whitney Houston","Michael Jackson","Madonna","Prince"], ans: 1 },
+    { q: "What genre is Taylor Swift primarily known for?", opts: ["Hip Hop","Rock","Country/Pop","Jazz"], ans: 2 },
+    { q: "Which Beatles member was assassinated in 1980?", opts: ["Paul McCartney","Ringo Starr","George Harrison","John Lennon"], ans: 3 },
+    { q: "What is the best-selling album of all time?", opts: ["Back in Black","The Dark Side of the Moon","Thriller","Abbey Road"], ans: 2 },
+    { q: "Which artist is known as 'Rihanna'?", opts: ["Robyn Rihanna Fenty","Rihanna Marie Smith","Rihanna Johnson","Rihanna Williams"], ans: 0 },
+    { q: "How many strings does a standard guitar have?", opts: ["4","5","6","8"], ans: 2 },
+    { q: "Which rapper released 'Lose Yourself'?", opts: ["Jay-Z","Kanye West","Eminem","Drake"], ans: 2 },
+    { q: "What music streaming service is Swedish?", opts: ["Apple Music","Spotify","Tidal","Pandora"], ans: 1 },
+    { q: "Who sang 'Rolling in the Deep'?", opts: ["Beyoncé","Adele","Amy Winehouse","Lady Gaga"], ans: 1 },
+    { q: "Which band is Freddie Mercury associated with?", opts: ["The Rolling Stones","Queen","Aerosmith","Guns N' Roses"], ans: 1 },
+    { q: "What does 'BPM' stand for in music?", opts: ["Bass Per Minute","Beats Per Minute","Bars Per Measure","Band Performance Mode"], ans: 1 },
+    { q: "Which country is K-pop from?", opts: ["Japan","China","South Korea","Thailand"], ans: 2 },
+  ],
+};
+let selectedQuizCategory = 'worldcup';
+
+let quizRewardType = 'hammer';
+let usedQuestions = new Set();
+
+function updateShopInventory() {
+  document.getElementById('shop-hammer').textContent = boosters.hammer;
+  document.getElementById('shop-shuffle').textContent = boosters.shuffle;
+  document.getElementById('shop-moves').textContent = boosters.moves;
+  document.getElementById('shop-hint').textContent = boosters.hint;
+}
+
+function loadQuiz() {
+  const bank = QUIZ_BANKS[selectedQuizCategory] || QUIZ_BANKS.worldcup;
+  let available = [];
+  for (let i = 0; i < bank.length; i++) {
+    if (!usedQuestions.has(selectedQuizCategory + '_' + i)) available.push(i);
+  }
+  if (available.length === 0) { usedQuestions.clear(); available = bank.map((_,i) => i); }
+
+  const qi = available[Math.floor(Math.random() * available.length)];
+  usedQuestions.add(selectedQuizCategory + '_' + qi);
+  const q = bank[qi];
+
+  const rewardLabels = { hammer: '🔨 +1 Hammer', shuffle: '🔀 +1 Shuffle', moves: '➕ +1 Extra Moves', hint: '💡 +1 Hint' };
+  document.getElementById('quiz-reward-badge').textContent = rewardLabels[quizRewardType];
+  document.getElementById('quiz-question').textContent = q.q;
+
+  const optsEl = document.getElementById('quiz-options');
+  optsEl.innerHTML = '';
+  const letters = ['A','B','C','D'];
+
+  q.opts.forEach((opt, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'quiz-opt';
+    btn.innerHTML = `<span class="opt-letter">${letters[i]}</span><span>${opt}</span>`;
+    btn.addEventListener('click', () => answerQuiz(i, q.ans, optsEl));
+    optsEl.appendChild(btn);
+  });
+
+  document.getElementById('quiz-result').className = 'quiz-result';
+  document.getElementById('quiz-result').style.display = 'none';
+  document.getElementById('quiz-next').style.display = 'none';
+}
+
+function answerQuiz(picked, correct, optsEl) {
+  const opts = optsEl.querySelectorAll('.quiz-opt');
+  opts.forEach((o, i) => {
+    o.classList.add('disabled');
+    if (i === correct) o.classList.add('correct');
+    if (i === picked && i !== correct) o.classList.add('wrong');
+  });
+
+  const result = document.getElementById('quiz-result');
+  if (picked === correct) {
+    result.textContent = '✅ Correct! Booster earned!';
+    result.className = 'quiz-result show win';
+    boosters[quizRewardType]++;
+    saveBoosters();
+    updateShopInventory();
+    sfxWin();
+  } else {
+    result.textContent = '❌ Wrong! Try another question.';
+    result.className = 'quiz-result show lose';
+    sfxFail();
+  }
+  document.getElementById('quiz-next').style.display = '';
+}
+
+document.getElementById('quiz-next').addEventListener('click', () => { sfxClick(); loadQuiz(); });
+
+document.getElementById('pick-hammer').addEventListener('click', () => { sfxClick(); quizRewardType = 'hammer'; loadQuiz(); });
+document.getElementById('pick-shuffle').addEventListener('click', () => { sfxClick(); quizRewardType = 'shuffle'; loadQuiz(); });
+document.getElementById('pick-moves').addEventListener('click', () => { sfxClick(); quizRewardType = 'moves'; loadQuiz(); });
+document.getElementById('pick-hint').addEventListener('click', () => { sfxClick(); quizRewardType = 'hint'; loadQuiz(); });
+
+document.getElementById('open-shop-btn').addEventListener('click', () => {
+  initAudio();
+  sfxClick();
+  updateShopInventory();
+  loadQuiz();
+  showScreen('shop');
+});
+
+document.getElementById('shop-back-btn').addEventListener('click', () => {
+  sfxClick();
+  renderMap();
+  showScreen('map');
+  updateHUD && document.getElementById('hammer-count') && (document.getElementById('hammer-count').textContent = boosters.hammer);
+});
+
+// ===== QUIZ CATEGORY SELECTOR =====
+document.querySelectorAll('.quiz-cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sfxClick();
+    document.querySelectorAll('.quiz-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedQuizCategory = btn.dataset.cat;
+    usedQuestions.clear();
+    loadQuiz();
+  });
+});
+
+// ===== HINT SYSTEM =====
+let hintTimer = null;
+let hintHighlighted = [];
+
+function findValidMove() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (chocolate[r][c]) continue;
+      if (c + 1 < COLS && !chocolate[r][c + 1]) {
+        swap(c, r, c + 1, r);
+        const hasMatch = findMatches().length > 0 || checkCombo(c, r, c + 1, r);
+        swap(c, r, c + 1, r);
+        if (hasMatch) return [{ r, c }, { r, c: c + 1 }];
+      }
+      if (r + 1 < ROWS && !chocolate[r + 1][c]) {
+        swap(c, r, c, r + 1);
+        const hasMatch = findMatches().length > 0 || checkCombo(c, r, c, r + 1);
+        swap(c, r, c, r + 1);
+        if (hasMatch) return [{ r, c }, { r: r + 1, c }];
+      }
+    }
+  }
+  return null;
+}
+
+function showHint() {
+  clearHintHighlight();
+  const move = findValidMove();
+  if (!move) return;
+  move.forEach(pos => {
+    const cell = grid[pos.r][pos.c];
+    if (!cell) return;
+    const el = boardEl.querySelector(`[data-id="${cell.id}"]`);
+    if (el) { el.classList.add('hint-pulse'); hintHighlighted.push(el); }
+  });
+  setTimeout(clearHintHighlight, 3000);
+}
+
+function clearHintHighlight() {
+  hintHighlighted.forEach(el => el.classList.remove('hint-pulse'));
+  hintHighlighted = [];
+}
+
+function resetHintTimer() {
+  clearHintHighlight();
+  if (hintTimer) clearTimeout(hintTimer);
+  if (!document.getElementById('game-screen').classList.contains('active')) return;
+  if (busy) return;
+  hintTimer = setTimeout(() => {
+    if (!busy && document.getElementById('game-screen').classList.contains('active')) showHint();
+  }, 5000);
+}
+
+document.getElementById('boost-hint').addEventListener('click', () => {
+  if (busy || boosters.hint <= 0) return;
+  boosters.hint--;
+  saveBoosters();
+  sfxBooster();
+  showHint();
+  updateHUD();
+});
+
+// ===== LEADERBOARD =====
+let bestScores = JSON.parse(localStorage.getItem('fc_bestScores') || '{}');
+
+function saveBestScore(lvl, sc) {
+  if (!bestScores[lvl] || sc > bestScores[lvl]) {
+    bestScores[lvl] = sc;
+    localStorage.setItem('fc_bestScores', JSON.stringify(bestScores));
+  }
+}
+
+function renderLeaderboard() {
+  const list = document.getElementById('lb-list');
+  list.innerHTML = '';
+  const levels = Object.keys(bestScores).map(Number).sort((a, b) => a - b);
+  if (levels.length === 0) {
+    list.innerHTML = '<p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">No scores yet. Play some levels!</p>';
+  } else {
+    levels.forEach(lvl => {
+      const row = document.createElement('div');
+      row.className = 'lb-row';
+      row.innerHTML = `<span class="lb-level">Level ${lvl}</span><span class="lb-score">${bestScores[lvl].toLocaleString()}</span>`;
+      list.appendChild(row);
+    });
+  }
+  const timedBest = parseInt(localStorage.getItem('fc_timedBest') || '0');
+  document.getElementById('lb-timed-best').textContent = timedBest > 0 ? `Timed Mode Best: ${timedBest.toLocaleString()}` : '';
+}
+
+document.getElementById('lb-btn').addEventListener('click', () => {
+  sfxClick();
+  renderLeaderboard();
+  showScreen('leaderboard');
+});
+
+document.getElementById('lb-back-btn').addEventListener('click', () => {
+  sfxClick();
+  renderMap();
+  showScreen('map');
+});
+
+// ===== ACHIEVEMENTS =====
+const ACHIEVEMENTS = [
+  { id: 'cascade5', name: 'Chain Reaction', desc: '5 cascades in one level', icon: '⚡', stat: 'maxCascade', target: 5 },
+  { id: 'cascade10', name: 'Unstoppable', desc: '10 cascades in one level', icon: '🔥', stat: 'maxCascade', target: 10 },
+  { id: 'choc50', name: 'Chocoholic', desc: 'Clear 50 chocolates total', icon: '🍫', stat: 'totalChocolate', target: 50 },
+  { id: 'choc100', name: 'Chocolate Master', desc: 'Clear 100 chocolates total', icon: '🏅', stat: 'totalChocolate', target: 100 },
+  { id: 'lvl10', name: 'Rising Star', desc: 'Beat level 10', icon: '⭐', stat: 'maxLevelBeat', target: 10 },
+  { id: 'lvl20', name: 'Veteran', desc: 'Beat level 20', icon: '🌟', stat: 'maxLevelBeat', target: 20 },
+  { id: 'lvl50', name: 'Champion', desc: 'Beat level 50', icon: '👑', stat: 'maxLevelBeat', target: 50 },
+  { id: 'lvl100', name: 'Legend', desc: 'Beat level 100', icon: '💎', stat: 'maxLevelBeat', target: 100 },
+  { id: 'score50k', name: 'Big Scorer', desc: 'Score 50,000 total points', icon: '📈', stat: 'totalScore', target: 50000 },
+  { id: 'score200k', name: 'Point Machine', desc: 'Score 200,000 total points', icon: '🚀', stat: 'totalScore', target: 200000 },
+  { id: 'matches500', name: 'Match Maker', desc: '500 total matches', icon: '🎯', stat: 'totalMatches', target: 500 },
+  { id: 'daily5', name: 'Dedicated', desc: 'Complete 5 daily challenges', icon: '📅', stat: 'dailyCompleted', target: 5 },
+];
+
+let gameStats = JSON.parse(localStorage.getItem('fc_stats') || '{"totalMatches":0,"totalScore":0,"totalChocolate":0,"maxCascade":0,"maxLevelBeat":0,"dailyCompleted":0,"currentLevelCascades":0}');
+
+function saveStats() { localStorage.setItem('fc_stats', JSON.stringify(gameStats)); }
+
+function checkAchievements() {
+  let newUnlock = false;
+  const unlocked = JSON.parse(localStorage.getItem('fc_achievements') || '[]');
+  ACHIEVEMENTS.forEach(a => {
+    if (unlocked.includes(a.id)) return;
+    if ((gameStats[a.stat] || 0) >= a.target) {
+      unlocked.push(a.id);
+      newUnlock = true;
+    }
+  });
+  if (newUnlock) localStorage.setItem('fc_achievements', JSON.stringify(unlocked));
+  return newUnlock;
+}
+
+function renderAchievements() {
+  const grid = document.getElementById('achieve-grid');
+  grid.innerHTML = '';
+  const unlocked = JSON.parse(localStorage.getItem('fc_achievements') || '[]');
+  ACHIEVEMENTS.forEach(a => {
+    const isUnlocked = unlocked.includes(a.id);
+    const progress = Math.min(gameStats[a.stat] || 0, a.target);
+    const card = document.createElement('div');
+    card.className = 'achieve-card ' + (isUnlocked ? 'unlocked' : 'locked');
+    card.innerHTML = `<div class="achieve-icon">${a.icon}</div>
+      <div class="achieve-name">${a.name}</div>
+      <div class="achieve-desc">${a.desc}</div>
+      <div class="achieve-progress">${isUnlocked ? 'UNLOCKED' : progress + ' / ' + a.target}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('achieve-btn').addEventListener('click', () => {
+  sfxClick();
+  renderAchievements();
+  showScreen('achieve');
+});
+
+document.getElementById('achieve-back-btn').addEventListener('click', () => {
+  sfxClick();
+  renderMap();
+  showScreen('map');
+});
+
+// ===== DAILY CHALLENGE =====
+function getDailyDateKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function isDailyCompleted() {
+  return localStorage.getItem('fc_daily_' + getDailyDateKey()) === 'done';
+}
+
+function generateDailyLevel() {
+  const dateStr = getDailyDateKey();
+  let seed = 0;
+  for (let i = 0; i < dateStr.length; i++) seed = (seed * 31 + dateStr.charCodeAt(i)) & 0x7fffffff;
+  const types = ['score','collect','jelly','chocolate'];
+  const type = types[seed % 4];
+  const lv = { moves: 12 + (seed % 4), type: type, bombs: 3 + (seed % 4), _isDaily: true };
+  if (type === 'score') lv.target = 10000 + (seed % 5) * 1000;
+  if (type === 'collect') {
+    const a = seed % 6, b = (seed + 3) % 6;
+    lv.collect = { [a]: 35 + (seed % 10), [b]: 35 + ((seed >> 3) % 10) };
+  }
+  return lv;
+}
+
+document.getElementById('daily-btn').addEventListener('click', () => {
+  initAudio();
+  sfxClick();
+  if (isDailyCompleted()) {
+    overlayEl.innerHTML = `<h1 style="color:#44e5a0;">Daily Done!</h1><p>Come back tomorrow for a new challenge!</p><button class="btn" id="overlay-daily-ok">OK</button>`;
+    overlayEl.classList.add('visible');
+    document.getElementById('overlay-daily-ok').addEventListener('click', () => overlayEl.classList.remove('visible'));
+    return;
+  }
+  level = 0;
+  levelData = generateDailyLevel();
+  colorCount = 8;
+  if (levelData.type === 'collect') levelData._collected = {};
+  moves = levelData.moves;
+  score = 0;
+  selected = null;
+  busy = false;
+  activeBooster = null;
+  document.getElementById('boost-hammer').classList.remove('active');
+  initGrid();
+  initJelly();
+  initChocolate();
+  initCountdownBombs();
+  while (findMatches().length > 0) initGrid();
+  render();
+  updateHUD();
+  document.getElementById('level-num').textContent = 'Daily';
+  showScreen('game');
+});
+
+function updateDailyBtn() {
+  const btn = document.getElementById('daily-btn');
+  if (isDailyCompleted()) {
+    btn.classList.add('completed-today');
+    btn.textContent = '✅ Daily Complete';
+  } else {
+    btn.classList.remove('completed-today');
+    btn.textContent = '🌟 Daily Challenge';
+  }
+}
+
+// ===== TIMED MODE =====
+let timedInterval = null;
+let timedTime = 0;
+let timedScore = 0;
+let timedActive = false;
+let timedGrid, timedJelly, timedChocolate, timedBombs;
+
+function startTimedMode() {
+  initAudio();
+  timedTime = 60;
+  timedScore = 0;
+  timedActive = true;
+  colorCount = 6;
+  level = 1;
+  levelData = { type: 'score', target: 999999, moves: 999 };
+  moves = 999;
+  score = 0;
+  selected = null;
+  busy = false;
+  activeBooster = null;
+  jelly = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  chocolate = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  countdownBombs = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  initGrid();
+  while (findMatches().length > 0) initGrid();
+
+  updateCellSize();
+  render();
+  document.getElementById('timed-score').textContent = '0';
+  document.getElementById('timed-timer').textContent = '60';
+  document.getElementById('timed-timer').classList.remove('low');
+  const timedBest = parseInt(localStorage.getItem('fc_timedBest') || '0');
+  document.getElementById('timed-best').textContent = timedBest;
+  showScreen('timed');
+
+  // Reattach board to timed screen
+  const timedBoard = document.getElementById('timed-board');
+  timedBoard.style.width = boardEl.style.width;
+  timedBoard.style.height = boardEl.style.height;
+  timedBoard.style.position = 'relative';
+  timedBoard.style.borderRadius = '12px';
+  timedBoard.style.background = 'rgba(0,0,0,0.35)';
+  timedBoard.style.overflow = 'hidden';
+
+  // We reuse the main board but move it
+  const gameBoard = document.getElementById('board');
+  // Copy board content to timed board
+  timedBoard.innerHTML = gameBoard.innerHTML;
+
+  // Actually, let's just swap the board reference
+  // We'll use the main game loop but show timed screen
+  // Simpler: just use game screen with timed HUD overlay
+  // Let's go back to game screen but in timed mode
+  showScreen('game');
+  document.getElementById('level-num').textContent = 'Timed';
+  document.getElementById('moves-val').textContent = '--';
+  document.getElementById('target-val').textContent = '--';
+  document.getElementById('obj-info').textContent = 'Match to earn points! Matches add time!';
+
+  if (timedInterval) clearInterval(timedInterval);
+  timedInterval = setInterval(() => {
+    if (!timedActive) return;
+    timedTime--;
+    document.getElementById('moves-val').textContent = timedTime + 's';
+    if (timedTime <= 10) document.getElementById('moves-val').style.color = '#ff5c8a';
+    else document.getElementById('moves-val').style.color = '#5ca0ff';
+    if (timedTime <= 0) {
+      clearInterval(timedInterval);
+      timedActive = false;
+      busy = true;
+      sfxFail();
+      const best = parseInt(localStorage.getItem('fc_timedBest') || '0');
+      if (score > best) localStorage.setItem('fc_timedBest', String(score));
+      setTimeout(() => {
+        overlayEl.innerHTML = `<h1 style="color:#5ca0ff;">Time's Up!</h1>
+          <p>Score: ${score}${score > best ? '<br>NEW BEST!' : '<br>Best: ' + best}</p>
+          <button class="btn" id="overlay-timed-retry">Play Again</button>
+          <button class="btn btn-secondary" id="overlay-timed-map">Level Map</button>`;
+        overlayEl.classList.add('visible');
+        document.getElementById('overlay-timed-retry').addEventListener('click', () => {
+          overlayEl.classList.remove('visible');
+          startTimedMode();
+        });
+        document.getElementById('overlay-timed-map').addEventListener('click', () => {
+          overlayEl.classList.remove('visible');
+          timedActive = false;
+          renderMap();
+          showScreen('map');
+        });
+      }, 600);
+    }
+  }, 1000);
+}
+
+document.getElementById('timed-btn').addEventListener('click', () => {
+  sfxClick();
+  startTimedMode();
+});
+
+document.getElementById('timed-back-btn').addEventListener('click', () => {
+  sfxClick();
+  timedActive = false;
+  if (timedInterval) clearInterval(timedInterval);
+  renderMap();
+  showScreen('map');
+});
+
+// ===== PATCH: Update existing functions to integrate new features =====
+
+// Override the original startDrag to reset hint timer
+const _origStartDrag = startDrag;
+const _origRender = render;
+
+// Reset hint timer on any board interaction
+boardEl.addEventListener('mousedown', resetHintTimer);
+boardEl.addEventListener('touchstart', resetHintTimer);
+
+// Patch updateHUD to show hint count
+const _origUpdateHUD = updateHUD;
+const patchedUpdateHUD = function() {
+  _origUpdateHUD();
+  document.getElementById('hint-count').textContent = boosters.hint;
+  if (timedActive) {
+    document.getElementById('moves-val').textContent = timedTime + 's';
+    document.getElementById('target-val').textContent = '--';
+    document.getElementById('score-val').textContent = score;
+  }
+};
+// Replace updateHUD
+updateHUD = patchedUpdateHUD;
+
+// Patch the clearAndSpawnSpecials to track stats
+const _origClearAndSpawn = clearAndSpawnSpecials;
+clearAndSpawnSpecials = function() {
+  const chocBefore = chocolateRemaining();
+  const result = _origClearAndSpawn();
+  if (result) {
+    gameStats.totalMatches++;
+    gameStats.currentLevelCascades = cascadeCount;
+    if (cascadeCount > gameStats.maxCascade) gameStats.maxCascade = cascadeCount;
+    const chocCleared = chocBefore - chocolateRemaining();
+    if (chocCleared > 0) gameStats.totalChocolate = (gameStats.totalChocolate || 0) + chocCleared;
+    saveStats();
+    if (timedActive) {
+      const timeBonus = 1 + Math.min(cascadeCount, 2);
+      timedTime += timeBonus;
+    }
+  }
+  return result;
+};
+
+// Patch checkWinLose to save best scores and update stats
+const _origCheckWinLose = checkWinLose;
+checkWinLose = function() {
+  let won = false;
+  if (levelData.type === 'score') won = score >= levelData.target;
+  else if (levelData.type === 'jelly') won = jellyRemaining() === 0;
+  else if (levelData.type === 'chocolate') won = chocolateRemaining() === 0;
+  else if (levelData.type === 'collect') {
+    won = Object.entries(levelData.collect).every(([col,needed]) => (levelData._collected[col]||0) >= needed);
+  }
+
+  if (timedActive) {
+    // In timed mode, no win/lose from moves
+    if (!hasValidMoves()) { shuffleBoard(); render(); }
+    return;
+  }
+
+  if (won) {
+    busy = true;
+    sfxWin();
+    const stars = moves >= 15 ? 3 : moves >= 8 ? 2 : 1;
+
+    // Save stats
+    gameStats.totalScore += score;
+    if (level > 0) {
+      if (level > (gameStats.maxLevelBeat || 0)) gameStats.maxLevelBeat = level;
+      saveBestScore(level, score);
+    }
+    saveStats();
+    checkAchievements();
+
+    // Daily challenge reward
+    if (levelData._isDaily) {
+      localStorage.setItem('fc_daily_' + getDailyDateKey(), 'done');
+      boosters.hammer += 2;
+      boosters.shuffle += 2;
+      boosters.moves += 2;
+      boosters.hint += 2;
+      saveBoosters();
+      gameStats.dailyCompleted = (gameStats.dailyCompleted || 0) + 1;
+      saveStats();
+      checkAchievements();
+      setTimeout(() => {
+        overlayEl.innerHTML = `<h1 style="background:linear-gradient(135deg,#b050ff,#ff5c8a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Daily Complete!</h1>
+          <div class="stars">${'<span class="star-on">★</span>'.repeat(stars)}${'<span class="star-off">★</span>'.repeat(3-stars)}</div>
+          <p>Score: ${score}<br>Reward: +2 of each booster!</p>
+          <button class="btn" id="overlay-daily-map">Level Map</button>`;
+        overlayEl.classList.add('visible');
+        document.getElementById('overlay-daily-map').addEventListener('click', () => {
+          overlayEl.classList.remove('visible');
+          renderMap();
+          showScreen('map');
+        });
+      }, 600);
+      return;
+    }
+
+    levelStars[level] = Math.max(levelStars[level] || 0, stars);
+    if (level >= maxLevel) maxLevel = level + 1;
+    localStorage.setItem('fc_maxLevel', maxLevel);
+    localStorage.setItem('fc_stars', JSON.stringify(levelStars));
+    if (level % 3 === 0) { boosters.hammer++; boosters.shuffle++; saveBoosters(); }
+    setTimeout(() => showResultOverlay(true, stars), 600);
+    return;
+  }
+
+  if (moves <= 0) {
+    busy = true;
+    sfxFail();
+    gameStats.totalScore += score;
+    if (level > 0) saveBestScore(level, score);
+    saveStats();
+    setTimeout(() => showResultOverlay(false, 0), 600);
+    return;
+  }
+
+  if (!hasValidMoves()) { shuffleBoard(); render(); }
+};
+
+// Patch startLevel to reset hint timer and cascade tracking
+const _origStartLevel = startLevel;
+startLevel = function() {
+  timedActive = false;
+  if (timedInterval) clearInterval(timedInterval);
+  gameStats.currentLevelCascades = 0;
+  _origStartLevel();
+  resetHintTimer();
+  document.getElementById('moves-val').style.color = '#ff5c8a';
+};
+
+// Patch renderMap to show best scores on nodes and update daily button
+const _origRenderMap = renderMap;
+renderMap = function() {
+  try { _origRenderMap(); } catch(e) { console.error('origRenderMap:', e); }
+  try { updateDailyBtn(); } catch(e) { console.error('updateDailyBtn:', e); }
+  try {
+    const road = document.getElementById('map-road');
+    const nodes = road.querySelectorAll('.map-node');
+    nodes.forEach(node => {
+      const num = parseInt(node.textContent);
+      if (num && bestScores[num]) {
+        const bestEl = document.createElement('div');
+        bestEl.className = 'map-best-score';
+        bestEl.textContent = 'Best: ' + bestScores[num].toLocaleString();
+        node.appendChild(bestEl);
+      }
+    });
+  } catch(e) { console.error('bestScores:', e); }
+};
+
+renderMap();
+try { setupDrag(); } catch(e) { console.error('setupDrag error:', e); }
+
+// Failsafe: ensure back button always works even if other JS crashed
+document.addEventListener('click', function(e) {
+  if (e.target.id === 'back-btn' || e.target.closest('#back-btn')) {
+    try { sfxClick(); } catch(ex) {}
+    try { timedActive = false; if (timedInterval) clearInterval(timedInterval); } catch(ex) {}
+    try { renderMap(); } catch(ex) {}
+    showScreen('map');
+  }
+});
 </script>
 </body>
 </html>
